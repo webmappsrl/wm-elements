@@ -1,0 +1,15 @@
+<div style="display:flex; gap:1rem; padding:1rem; align-items:center; font-family:sans-serif;">
+  <label>shard <input [(ngModel)]="shard" /></label>
+  <label>app-id <input [(ngModel)]="appId" /></label>
+  <label>layer-id <input [(ngModel)]="layerId" /></label>
+  <label>lang <input [(ngModel)]="lang" /></label>
+  <label>hide-cta <input type="checkbox" [(ngModel)]="hideCta" /></label>
+</div>
+<!--
+  Da Task 6 in poi: sostituire questo placeholder con
+  <app-wm-layer-map-root [shard]="shard" [appId]="appId" [layerId]="layerId" ...></app-wm-layer-map-root>
+  montato come componente Angular normale (non custom element) per avere hot reload.
+-->
+<div style="width:100%; height:600px; border:1px dashed #ccc; display:flex; align-items:center; justify-content:center; font-family:sans-serif; color:#888;">
+  demo placeholder — collegato dal Task 6
+</div>

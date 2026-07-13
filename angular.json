@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "wm-elements-tmp": {
+    "wm-elements": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -53,6 +53,12 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "demo": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "browser": "src/main.demo.ts"
             }
           },
           "defaultConfiguration": "production"
@@ -61,10 +67,13 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "wm-elements-tmp:build:production"
+              "buildTarget": "wm-elements:build:production"
             },
             "development": {
-              "buildTarget": "wm-elements-tmp:build:development"
+              "buildTarget": "wm-elements:build:development"
+            },
+            "demo": {
+              "buildTarget": "wm-elements:build:demo"
             }
           },
           "defaultConfiguration": "development"
