@@ -1,0 +1,47 @@
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "useDefineForClassFields": false,
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "downlevelIteration": true,
+    "baseUrl": ".",
+    "paths": {
+      "@wm-core/*": ["src/app/shared/wm-core/projects/wm-core/src/*"],
+      "@map-core/*": ["src/app/shared/map-core/src/*"],
+      "@wm-types/*": ["src/app/shared/wm-types/src/*"],
+      "@ionic/core": ["node_modules/@ionic/core"],
+      "@ionic/core/*": ["node_modules/@ionic/core/*"],
+      "@ionic/angular": ["node_modules/@ionic/angular"],
+      "@ionic/angular/*": ["node_modules/@ionic/angular/*"],
+      "swiper": ["node_modules/swiper"],
+      "swiper/*": ["node_modules/swiper/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true,
+    "skipLibCheck": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
+}
