@@ -1,23 +1,29 @@
 /**
  * wm-core (auth, conf/ec caching, lang, geolocation) reads/writes
- * `localStorage` directly in several places, assuming it's always available —
- * true for the webapp, not for a widget embedded on an arbitrary third-party
- * page. If that page frames us in a sandboxed iframe without
- * `allow-same-origin`, merely accessing `window.localStorage` throws a
- * `SecurityError` synchronously, breaking every wm-core code path that touches
- * it. Since we can't modify wm-core, shadow `window.localStorage` with an
- * in-memory fallback (call before any wm-core code runs) — same technique for
- * `sessionStorage`, which the spec restricts identically.
+ * `localStorage`/`sessionStorage` directly in several places, assuming
+ * they're always available — true for the webapp, not for a widget embedded
+ * on an arbitrary third-party page. If that page frames us in a sandboxed
+ * iframe without `allow-same-origin`, real browser storage is blocked; merely
+ * accessing `window.localStorage` throws a `SecurityError`.
+ *
+ * Detecting this first (try accessing, patch only if it throws) turned out
+ * unreliable: in Chromium, the very first access after navigation can
+ * succeed while a later one in the same sandboxed document throws — the
+ * exact browser-internal timing isn't something to depend on.
+ *
+ * None of wm-core's storage usage needs cross-reload persistence for this
+ * read-only, no-auth, no-UGC widget (API response caching, an unused
+ * access_token, an unused privacy_agree flag, a lang preference, a
+ * geolocation distance filter we never use). So instead of detecting
+ * anything, always replace both with an in-memory implementation scoped to
+ * this page load — a cache miss on next reload costs one extra network
+ * request, nothing else, on every page (sandboxed or not), for the same
+ * behavior everywhere rather than something that only sometimes doesn't
+ * throw depending on browser state.
  */
-function shimStorageIfBlocked(prop: 'localStorage' | 'sessionStorage'): void {
-  try {
-    window[prop];
-    return;
-  } catch {
-    // access itself threw — fall through to the in-memory shim below
-  }
+function createMemoryStorage(): Storage {
   const memory = new Map<string, string>();
-  const fallback: Storage = {
+  return {
     getItem: (key: string) => (memory.has(key) ? memory.get(key)! : null),
     setItem: (key: string, value: string) => void memory.set(key, String(value)),
     removeItem: (key: string) => void memory.delete(key),
@@ -27,10 +33,16 @@ function shimStorageIfBlocked(prop: 'localStorage' | 'sessionStorage'): void {
       return memory.size;
     },
   };
-  Object.defineProperty(window, prop, {value: fallback, configurable: true});
 }
 
 export function ensureSafeStorage(): void {
-  shimStorageIfBlocked('localStorage');
-  shimStorageIfBlocked('sessionStorage');
+  for (const prop of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      Object.defineProperty(window, prop, {value: createMemoryStorage(), configurable: true});
+    } catch {
+      // Extremely unlikely (defineProperty on `window` itself blocked) — if
+      // it happens, wm-core's own unguarded calls will throw as before,
+      // no worse than not attempting this at all.
+    }
+  }
 }
