@@ -11,3 +11,11 @@
   [layer-id]="layerId"
   style="display:block;width:100%;height:600px"
 ></app-wm-layer-map-root>
+
+<div style="padding:1rem; font-family:sans-serif;">
+  <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+    <strong>Codice da embeddare</strong>
+    <button type="button" (click)="copyEmbedSnippet()">Copia</button>
+  </div>
+  <pre style="background:#1e1e1e; color:#d4d4d4; padding:1rem; border-radius:6px; overflow-x:auto;"><code>{{ embedSnippet }}</code></pre>
+</div>
