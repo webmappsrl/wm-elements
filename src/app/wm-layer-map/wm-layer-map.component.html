@@ -1,0 +1,66 @@
+<div class="webmapp-pageroute-map-container">
+  <div class="panel" part="panel" *ngIf="ecTrack$|async as ecTrack">
+    <wm-track-properties (dismiss)="updateEcTrack()"></wm-track-properties>
+  </div>
+
+  <div class="panel" part="panel" *ngIf="currentPoi$|async as currentPoi">
+    <button class="panel-close" part="panel-close" (click)="unselectPoi()">✕</button>
+    <p class="panel-title" part="panel-title">{{ currentPoi.properties?.name|wmtrans }}</p>
+    <wm-tab-image-gallery
+      *ngIf="currentPoi.properties?.image_gallery?.length"
+      [imageGallery]="currentPoi.properties?.image_gallery"
+    ></wm-tab-image-gallery>
+    <wm-inner-component-html
+      *ngIf="currentPoi.properties?.description as description"
+      [html]="description|wmtrans"
+      [enableDismiss]="false"
+    ></wm-inner-component-html>
+  </div>
+
+  <wm-map
+    #wmap
+    [wmMapConf]="confMap$|async"
+    [wmMapPadding]="mapPadding$|async"
+    [wmMapFilters]="apiElasticState$|async"
+    [wmMapEnableMapControls]="true"
+    (wmMapStateEvt)="setLoader($event)"
+    wmMapLayer
+    [jidoUpdateTime]="confJIDOUPDATETIME$|async"
+    [wmMapLayerDataLayerUrls]="dataLayerUrls$|async"
+    [wmMapLayerLayer]="currentLayer$|async"
+    [wmMapLayerRefresh]="refreshLayer$|async"
+    [wmMapLayerEnableFeaturesInViewport]="confOPTIONSShowFeaturesInViewport$|async"
+    [wmMapLayerShowFeaturesInViewport]="showFeaturesInViewport$|async"
+    [wmMapLayerZoomFeaturesInViewport]="zoomFeaturesInViewport$|async"
+    (colorSelectedFromLayerEVT)="trackColor$.next($event)"
+    (featuresInViewportEVT)="featuresInViewport($event)"
+    wmMapPois
+    [wmMapPoisPoi]="currentEcPoiId$|async"
+    [wmMapPoisPois]="layerPois$|async"
+    [WmMapPoisUnselectPoi]="resetSelectedPoi$|async"
+    (currentPoiEvt)="setPoi($event)"
+    wmMapTrack
+    [track]="track$|async"
+    [trackElevationChartElements]="trackElevationChartHoverElements$|async"
+    (trackSelectedFromLayerEVT)="updateEcTrack($event)"
+    wmMapTrackRelatedPois
+    [wmTrackRelatedPoiIcons]="icons$|async"
+    [related-current-ec-poi-id]="currentRelatedPoiID$|async"
+    (related-poi)="setCurrentRelatedPoi($event)"
+    (related-poi-next)="currentPoiNextID$.next(+$event)"
+    (related-poi-prev)="currentPoiPrevID$.next(+$event)"
+  >
+    <div class="bottom-right" bottom-right>
+      <ng-content select="[bottom-right]"></ng-content>
+    </div>
+
+    <ion-progress-bar
+      bottom
+      type="indeterminate"
+      color="primary"
+      *ngIf="(loading$|async)"
+    ></ion-progress-bar>
+  </wm-map>
+  <ng-content></ng-content>
+  <wm-features-in-viewport *ngIf="showFeaturesInViewport$|async"></wm-features-in-viewport>
+</div>

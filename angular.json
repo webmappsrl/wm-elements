@@ -15,39 +15,57 @@
       "prefix": "app",
       "architect": {
         "build": {
-          "builder": "@angular/build:application",
+          "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "browser": "src/main.ts",
-            "polyfills": [
-              "zone.js"
-            ],
+            "outputPath": "dist/wm-elements",
+            "index": "src/index.html",
+            "main": "src/main.ts",
+            "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
-            "inlineStyleLanguage": "scss",
             "assets": [
               {
                 "glob": "**/*",
                 "input": "public"
               }
             ],
-            "styles": [
-              "src/styles.scss"
+            "styles": ["src/styles.scss"],
+            "scripts": ["node_modules/graphhopper-js-api-client/dist/graphhopper-client.js"],
+            "aot": false,
+            "vendorChunk": true,
+            "extractLicenses": false,
+            "buildOptimizer": false,
+            "sourceMap": true,
+            "optimization": false,
+            "namedChunks": true,
+            "allowedCommonJsDependencies": [
+              "togpx",
+              "xml-utils/find-tags-by-name.js",
+              "xml-utils/get-attribute.js",
+              "lru-cache",
+              "web-worker",
+              "rbush",
+              "graphhopper-js-api-client",
+              "localforage",
+              "color"
             ]
           },
           "configurations": {
             "production": {
+              "optimization": true,
+              "outputHashing": "all",
+              "sourceMap": false,
+              "namedChunks": false,
+              "aot": true,
+              "extractLicenses": true,
+              "vendorChunk": false,
+              "buildOptimizer": true,
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
-                },
-                {
-                  "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "3mb",
+                  "maximumError": "5mb"
                 }
-              ],
-              "outputHashing": "all"
+              ]
             },
             "development": {
               "optimization": false,
@@ -58,13 +76,29 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
-              "browser": "src/main.demo.ts"
+              "main": "src/main.demo.ts",
+              "index": "src/index.demo.html"
+            },
+            "demo-optimized": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false,
+              "main": "src/main.demo.ts",
+              "index": "src/index.demo.html"
+            },
+            "wm-layer-map": {
+              "main": "src/main.ts",
+              "index": "src/index.html",
+              "outputPath": "dist/wm-layer-map"
             }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
-          "builder": "@angular/build:dev-server",
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "buildTarget": "wm-elements:build"
+          },
           "configurations": {
             "production": {
               "buildTarget": "wm-elements:build:production"
@@ -74,31 +108,32 @@
             },
             "demo": {
               "buildTarget": "wm-elements:build:demo"
+            },
+            "demo-optimized": {
+              "buildTarget": "wm-elements:build:demo-optimized"
             }
           },
           "defaultConfiguration": "development"
         },
         "extract-i18n": {
-          "builder": "@angular/build:extract-i18n"
+          "builder": "@angular-devkit/build-angular:extract-i18n",
+          "options": {
+            "buildTarget": "wm-elements:build"
+          }
         },
         "test": {
-          "builder": "@angular/build:karma",
+          "builder": "@angular-devkit/build-angular:karma",
           "options": {
-            "polyfills": [
-              "zone.js",
-              "zone.js/testing"
-            ],
+            "polyfills": ["zone.js", "zone.js/testing"],
             "tsConfig": "tsconfig.spec.json",
-            "inlineStyleLanguage": "scss",
             "assets": [
               {
                 "glob": "**/*",
                 "input": "public"
               }
             ],
-            "styles": [
-              "src/styles.scss"
-            ]
+            "styles": ["src/styles.scss"],
+            "scripts": []
           }
         }
       }

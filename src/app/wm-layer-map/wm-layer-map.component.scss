@@ -1,0 +1,70 @@
+:host {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+:host {
+  .webmapp-pageroute-map-container {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: relative;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    -webkit-flex-wrap: nowrap;
+    -ms-flex-wrap: nowrap;
+    flex-wrap: nowrap;
+    -webkit-justify-content: flex-start;
+    -ms-flex-pack: start;
+    justify-content: flex-start;
+    -webkit-align-content: stretch;
+    -ms-flex-line-pack: stretch;
+    align-content: stretch;
+    -webkit-align-items: stretch;
+    -ms-flex-align: stretch;
+    align-items: stretch;
+
+    > * {
+      -webkit-order: 0;
+      -ms-flex-order: 0;
+      order: 0;
+      -webkit-flex: 0 1 auto;
+      -ms-flex: 0 1 auto;
+      flex: 0 1 auto;
+      -webkit-align-self: auto;
+      -ms-flex-item-align: auto;
+      align-self: auto;
+    }
+    .webmapp-pageroute-map {
+      width: 100%;
+      display: block;
+    }
+    .opened {
+      display: block;
+    }
+  }
+}
+
+wm-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--wm-panel-width, 360px);
+  max-width: 100%;
+  overflow-y: auto;
+  z-index: 10;
+  background: var(--wm-color-light, #fff);
+}

@@ -1,11 +1,15 @@
 {
   "name": "wm-elements",
   "version": "0.0.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "start:demo": "ng serve --configuration=demo",
-    "build": "ng build",
+    "build:wm-layer-map": "ng build --configuration=production,wm-layer-map",
+    "build:test:wm-layer-map": "npm run build:wm-layer-map && node scripts/sync-test-page.js wm-layer-map",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -67,6 +71,7 @@
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
+    "@angular-devkit/build-angular": "^20.3.32",
     "@angular/build": "^20.3.32",
     "@angular/cli": "^20.3.32",
     "@angular/compiler-cli": "^20.3.0",

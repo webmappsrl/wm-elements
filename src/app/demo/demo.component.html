@@ -5,11 +5,9 @@
   <label>lang <input [(ngModel)]="lang" /></label>
   <label>hide-cta <input type="checkbox" [(ngModel)]="hideCta" /></label>
 </div>
-<!--
-  Da Task 6 in poi: sostituire questo placeholder con
-  <app-wm-layer-map-root [shard]="shard" [appId]="appId" [layerId]="layerId" ...></app-wm-layer-map-root>
-  montato come componente Angular normale (non custom element) per avere hot reload.
--->
-<div style="width:100%; height:600px; border:1px dashed #ccc; display:flex; align-items:center; justify-content:center; font-family:sans-serif; color:#888;">
-  demo placeholder — collegato dal Task 6
-</div>
+<app-wm-layer-map-root
+  [shard]="shard"
+  [app-id]="appId"
+  [layer-id]="layerId"
+  style="display:block;width:100%;height:600px"
+></app-wm-layer-map-root>
