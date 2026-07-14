@@ -105,29 +105,39 @@ function waitForHostElement(
 
 function buildEnvironment(config: HostConfig): Environment {
   const {shardName, appId} = config;
+  const hostname = window.location.hostname;
+  const redirect = {shardName, appId};
 
   // EnvironmentService (wm-core) resolves shard/appId from window.location.hostname,
   // designed for the webapp's per-subdomain hosting model. For an embeddable widget
-  // on an arbitrary third-party domain we must force resolution via `redirects`.
-  // An empty-string key always matches (`hostname.includes('')` is true for every
-  // hostname), so EnvironmentService never falls through to the geohub/NaN branch.
-  // `environment.appId`/`shardName` are still set for the localhost shortcut branch.
+  // on an arbitrary third-party domain we force resolution via `redirects`.
+  // IMPORTANT: the matched redirect key must be truthy — `else if (matchedHost)`
+  // in EnvironmentService treats `''` as false even though `hostname.includes('')`
+  // is always true. Use the actual hostname (truthy on real embed domains) plus
+  // `'.'` as a fallback for hostnames that contain a dot.
   return {
     production: true,
     appId,
     shardName,
     shards,
     redirects: {
-      '': {shardName, appId},
+      ...(hostname ? {[hostname]: redirect} : {}),
+      '.': redirect,
     },
   };
 }
 
-export async function bootstrapWidget(hostCandidates: Element[] = []): Promise<void> {
-  if (customElements.get('wm-layer-map')) {
-    return;
-  }
+let bootstrapPromise: Promise<void> | null = null;
 
+export function bootstrapWidget(hostCandidates: Element[] = []): Promise<void> {
+  if (customElements.get('wm-layer-map')) {
+    return Promise.resolve();
+  }
+  bootstrapPromise ??= bootstrapWidgetOnce(hostCandidates);
+  return bootstrapPromise;
+}
+
+async function bootstrapWidgetOnce(hostCandidates: Element[]): Promise<void> {
   await waitForDocumentReady();
   const hostElement = await waitForHostElement(hostCandidates);
   const hostConfig = hostElement ? readHostConfig(hostElement) : null;
@@ -161,5 +171,3 @@ export async function bootstrapWidget(hostCandidates: Element[] = []): Promise<v
   const wmLayerMapElement = createCustomElement(WmLayerMapComponent, {injector: app.injector});
   customElements.define('wm-layer-map', wmLayerMapElement);
 }
-
-void bootstrapWidget([...document.querySelectorAll('wm-layer-map')]);
