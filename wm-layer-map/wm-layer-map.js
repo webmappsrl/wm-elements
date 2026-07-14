@@ -10,12 +10,16 @@
 // hosted (jsDelivr, a local static server, ...), without needing any global
 // config or a second attribute on the customer's <script> tag.
 //
-// publish-dist.sh injects the hashed Angular entry filenames below at publish
-// time (never renames them to fixed runtime.js/main.js on the dist branch).
-// The customer's <script src> stays stable; only this loader changes each
-// deploy, avoiding stale CDN/browser caches of fixed entry bundle names.
+// This file is intentionally static: publish-dist.sh copies it as-is on every
+// deploy. Hashed Angular entry filenames live in entries.json (updated each
+// publish) and are fetched from raw.githubusercontent.com so jsDelivr's
+// aggressive branch cache on @dist never blocks a deploy — only this loader
+// URL stays on the CDN, and its content never changes after the first publish.
 (function () {
   const base = new URL('.', import.meta.url).href;
+  const widgetName = new URL(import.meta.url).pathname.split('/').pop().replace(/\.js$/, '');
+  const manifestUrl =
+    `https://raw.githubusercontent.com/webmappsrl/wm-elements/dist/${widgetName}/entries.json`;
 
   function loadStyle(href) {
     const link = document.createElement('link');
@@ -39,12 +43,21 @@
     });
   }
 
-  loadStyle('styles.ef46db3751d8e999.css');
-  // Loaded strictly in sequence: runtime sets up Webpack's module registry,
-  // polyfills (zone.js) before Angular, scripts (graphhopper) before main.
-  loadScript('runtime.171fe5f47baf68f9.js')
-    .then(() => loadScript('polyfills.c495bb8cb84b647f.js'))
-    .then(() => loadScript('scripts.f2dc913d3440701a.js', {module: false}))
-    .then(() => loadScript('main.d7154ab82c304ee9.js'))
+  function loadBundles(entries) {
+    loadStyle(entries.styles);
+    // Loaded strictly in sequence: runtime sets up Webpack's module registry,
+    // polyfills (zone.js) before Angular, scripts (graphhopper) before main.
+    return loadScript(entries.runtime)
+      .then(() => loadScript(entries.polyfills))
+      .then(() => loadScript(entries.scripts, {module: false}))
+      .then(() => loadScript(entries.main));
+  }
+
+  fetch(manifestUrl, {cache: 'no-store'})
+    .then(r => {
+      if (!r.ok) throw new Error(`manifest HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(loadBundles)
     .catch(err => console.error('[wm-elements] failed to load widget bundle:', err));
 })();
