@@ -17,18 +17,65 @@ import {WmLayerMapComponent} from './wm-layer-map/wm-layer-map.component';
 // the <wm-layer-map> tag's attributes slightly AFTER the tag itself exists in
 // the DOM — a single synchronous querySelector at this point can find the
 // element with no `shard`/`app-id` yet, silently falling back to defaults
-// ('geohub'/NaN). Poll briefly for a `shard` attribute to actually appear
-// before giving up, instead of trusting a one-shot snapshot.
-async function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const el = document.querySelector('wm-layer-map');
-    if (el?.getAttribute('shard')) {
-      return el;
-    }
-    await new Promise(resolve => requestAnimationFrame(resolve));
+// ('geohub'/NaN). Wait for `shard` to appear via MutationObserver (works in
+// hidden tabs/iframes where requestAnimationFrame is suspended) with a
+// setTimeout fallback poll before giving up.
+function findHostWithShard(): Element | null {
+  const el = document.querySelector('wm-layer-map');
+  return el?.getAttribute('shard') ? el : null;
+}
+
+function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
+  const ready = findHostWithShard();
+  if (ready) {
+    return Promise.resolve(ready);
   }
-  return document.querySelector('wm-layer-map');
+
+  return new Promise(resolve => {
+    const deadline = Date.now() + timeoutMs;
+    let observer: MutationObserver | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (el: Element | null) => {
+      observer?.disconnect();
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      resolve(el);
+    };
+
+    const check = (): boolean => {
+      const el = findHostWithShard();
+      if (el) {
+        finish(el);
+        return true;
+      }
+      return false;
+    };
+
+    observer = new MutationObserver(() => {
+      check();
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['shard', 'app-id'],
+    });
+
+    const poll = () => {
+      if (check()) {
+        return;
+      }
+      if (Date.now() >= deadline) {
+        finish(document.querySelector('wm-layer-map'));
+        return;
+      }
+      timer = setTimeout(poll, 50);
+    };
+    timer = setTimeout(poll, 50);
+  });
 }
 
 (async () => {
