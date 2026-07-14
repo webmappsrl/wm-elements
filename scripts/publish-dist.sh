@@ -98,6 +98,7 @@ cp "scripts/widget-loader.template.js" "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
 
 pushd "$WORKTREE_DIR" > /dev/null
 git add -A
+PUBLISHED=false
 if git diff --cached --quiet; then
   echo "Nessuna modifica al bundle ${WIDGET} — skip commit/tag, purge cache comunque."
 else
@@ -105,6 +106,7 @@ else
   git tag "$TAG"
   git push origin HEAD:dist
   git push origin "$TAG"
+  PUBLISHED=true
 fi
 popd > /dev/null
 
@@ -128,7 +130,11 @@ done
 git worktree remove "$WORKTREE_DIR" --force
 
 echo ""
-echo "Pubblicato: branch 'dist' aggiornato (sottocartella '${WIDGET}/'), tag '$TAG' creato."
+if [[ "$PUBLISHED" == true ]]; then
+  echo "Pubblicato: branch 'dist' aggiornato (sottocartella '${WIDGET}/'), tag '$TAG' creato."
+else
+  echo "Bundle '${WIDGET}' invariato — branch 'dist' non aggiornato."
+fi
 echo "URL jsDelivr stabile:"
 echo "  https://cdn.jsdelivr.net/gh/webmappsrl/wm-elements@dist/${WIDGET}/${WIDGET}.js"
 echo "Cache jsDelivr purgata per tutti i file pubblicati in dist/${WIDGET}/."
