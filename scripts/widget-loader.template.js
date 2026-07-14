@@ -10,12 +10,15 @@
 // hosted (jsDelivr, a local static server, ...), without needing any global
 // config or a second attribute on the customer's <script> tag.
 //
-// publish-dist.sh injects the hashed Angular entry filenames below at publish
-// time (never renames them to fixed runtime.js/main.js on the dist branch).
-// The customer's <script src> stays stable; only this loader changes each
-// deploy, avoiding stale CDN/browser caches of fixed entry bundle names.
+// This file is intentionally static: publish-dist.sh copies it as-is on every
+// deploy. Hashed Angular entry filenames are resolved at runtime via the
+// jsDelivr Data API (https://www.jsdelivr.com/docs/data.jsdelivr.com) so the
+// stable @dist <widget>.js URL never needs to change — only hashed bundles do.
 (function () {
   const base = new URL('.', import.meta.url).href;
+  const widgetName = new URL(import.meta.url).pathname.split('/').pop().replace(/\.js$/, '');
+  const packageIndexUrl =
+    'https://data.jsdelivr.com/v1/package/gh/webmappsrl/wm-elements@dist/flat';
 
   function loadStyle(href) {
     const link = document.createElement('link');
@@ -39,12 +42,42 @@
     });
   }
 
-  loadStyle('__STYLES_CSS__');
-  // Loaded strictly in sequence: runtime sets up Webpack's module registry,
-  // polyfills (zone.js) before Angular, scripts (graphhopper) before main.
-  loadScript('__RUNTIME_JS__')
-    .then(() => loadScript('__POLYFILLS_JS__'))
-    .then(() => loadScript('__SCRIPTS_JS__', {module: false}))
-    .then(() => loadScript('__MAIN_JS__'))
-    .catch(err => console.error('[wm-elements] failed to load widget bundle:', err));
+  function resolveEntries(files) {
+    const prefix = `/${widgetName}/`;
+    const pick = (pattern) => {
+      const entry = files.find(
+        (f) => f.name.startsWith(prefix) && pattern.test(f.name.slice(prefix.length)),
+      );
+      return entry ? entry.name.slice(prefix.length) : null;
+    };
+    const entries = {
+      runtime: pick(/^runtime\.[^/]+\.js$/),
+      polyfills: pick(/^polyfills\.[^/]+\.js$/),
+      scripts: pick(/^scripts\.[^/]+\.js$/),
+      main: pick(/^main\.[^/]+\.js$/),
+      styles: pick(/^styles\.[^/]+\.css$/),
+    };
+    for (const [key, value] of Object.entries(entries)) {
+      if (!value) throw new Error(`missing ${key} in jsDelivr package index`);
+    }
+    return entries;
+  }
+
+  function loadBundles(entries) {
+    loadStyle(entries.styles);
+    // Loaded strictly in sequence: runtime sets up Webpack's module registry,
+    // polyfills (zone.js) before Angular, scripts (graphhopper) before main.
+    return loadScript(entries.runtime)
+      .then(() => loadScript(entries.polyfills))
+      .then(() => loadScript(entries.scripts, {module: false}))
+      .then(() => loadScript(entries.main));
+  }
+
+  fetch(packageIndexUrl, {cache: 'no-store'})
+    .then((r) => {
+      if (!r.ok) throw new Error(`package index HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(({files}) => loadBundles(resolveEntries(files)))
+    .catch((err) => console.error('[wm-elements] failed to load widget bundle:', err));
 })();

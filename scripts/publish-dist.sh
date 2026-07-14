@@ -81,12 +81,9 @@ for required in RUNTIME_JS POLYFILLS_JS SCRIPTS_JS MAIN_JS STYLES_CSS; do
 done
 popd > /dev/null
 
-sed -e "s#__RUNTIME_JS__#${RUNTIME_JS}#" \
-    -e "s#__POLYFILLS_JS__#${POLYFILLS_JS}#" \
-    -e "s#__SCRIPTS_JS__#${SCRIPTS_JS}#" \
-    -e "s#__MAIN_JS__#${MAIN_JS}#" \
-    -e "s#__STYLES_CSS__#${STYLES_CSS}#" \
-    "scripts/widget-loader.template.js" > "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
+# Static loader (never changes). Hashed entry filenames are resolved at runtime
+# via the jsDelivr Data API — see scripts/widget-loader.template.js.
+cp "scripts/widget-loader.template.js" "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
 
 pushd "$WORKTREE_DIR" > /dev/null
 git add -A
@@ -102,20 +99,66 @@ else
 fi
 popd > /dev/null
 
-# jsDelivr caches fixed entry filenames (runtime.js, main.js, ...) across deploys.
-# A stale runtime.js still points at deleted lazy chunks after a new publish.
-# Purge every file we just pushed so the stable @dist URL updates immediately.
+# Purge jsDelivr for hashed bundles (new filename each build = cache bust).
+# The stable <widget>.js loader is static after the first manifest-based publish;
+# entries.json is read from raw.githubusercontent.com, not jsDelivr.
+purge_jsdelivr_file() {
+  local cdn_path="$1"
+  local file_name
+  file_name=$(basename "$cdn_path")
+  local attempt=1
+  local max_attempts=6
+
+  while [[ "$attempt" -le "$max_attempts" ]]; do
+    local response
+    response=$(curl -s "https://purge.jsdelivr.net${cdn_path}" || true)
+    if [[ -z "$response" ]]; then
+      echo "  purge fallita (risposta vuota): ${file_name}" >&2
+      return 1
+    fi
+
+    local throttled reset
+    throttled=$(python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+paths = data.get('paths') or {}
+print('true' if any(p.get('throttled') for p in paths.values()) else 'false')
+" <<< "$response" 2>/dev/null || echo "false")
+    reset=$(python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+paths = list((data.get('paths') or {}).values())
+print(paths[0].get('throttlingReset', 60) if paths else 60)
+" <<< "$response" 2>/dev/null || echo "60")
+
+    if [[ "$throttled" != "true" ]]; then
+      echo "  purged: ${file_name}"
+      return 0
+    fi
+
+    if [[ "$attempt" -eq "$max_attempts" ]]; then
+      echo "  ATTENZIONE: purge throttled per ${file_name} — riprovare tra ~${reset}s." >&2
+      return 1
+    fi
+
+    echo "  purge throttled per ${file_name}, attendo ${reset}s (${attempt}/${max_attempts})..."
+    sleep "$reset"
+    attempt=$((attempt + 1))
+  done
+}
+
 echo ""
-echo "Purge cache jsDelivr..."
+echo "Purge cache jsDelivr (bundle hashati)..."
 CDN_BASE="/gh/webmappsrl/wm-elements@dist/${WIDGET}"
+# One-time: stable loader may still be the old inject-at-publish version on CDN.
+purge_jsdelivr_file "${CDN_BASE}/${WIDGET}.js" || true
 for published_file in "${WORKTREE_DIR}/${WIDGET}"/*; do
   if [[ -f "$published_file" ]]; then
     file_name=$(basename "$published_file")
-    if curl -sf "https://purge.jsdelivr.net${CDN_BASE}/${file_name}" > /dev/null; then
-      echo "  purged: ${file_name}"
-    else
-      echo "  purge fallita (non bloccante): ${file_name}" >&2
+    if [[ "$file_name" == "${WIDGET}.js" ]]; then
+      continue
     fi
+    purge_jsdelivr_file "${CDN_BASE}/${file_name}" || true
   fi
 done
 
@@ -129,5 +172,6 @@ else
 fi
 echo "URL jsDelivr stabile:"
 echo "  https://cdn.jsdelivr.net/gh/webmappsrl/wm-elements@dist/${WIDGET}/${WIDGET}.js"
-echo "Cache jsDelivr purgata per tutti i file pubblicati in dist/${WIDGET}/."
+echo "Il loader è statico; i nomi bundle hashati sono risolti via data.jsdelivr.com."
+echo "Branch @dist: cache CDN ~12h, purge inaffidabile — alla prima migrazione attendere o purgare ${WIDGET}.js."
 echo "Per il rollback: ripunta 'dist' a un tag precedente (git push origin <tag>:dist --force), mai un push distruttivo diretto."
