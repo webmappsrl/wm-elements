@@ -63,38 +63,30 @@ rm -rf "${WORKTREE_DIR:?}/${WIDGET}"
 mkdir -p "${WORKTREE_DIR}/${WIDGET}"
 cp -r "dist/${WIDGET}"/* "${WORKTREE_DIR}/${WIDGET}"/
 
-# ng build hashes entry bundle filenames (outputHashing: all) so browser caches
-# bust on every deploy — but the customer's <script src> must never change
-# (CLAUDE.md: "URL jsDelivr fissa"). Rename the top-level entry files to fixed
-# names inside the published copy only (not in dist/<widget>/, so local
-# ng build output stays untouched for repeated cache-busted local testing).
-# Safe because entry files are loaded via <script>/<link> tags only — verified
-# no other emitted file references them by their hashed name (lazy chunks use
-# webpack's own hash-aware runtime manifest, independent of entry filenames).
+# Customer-facing URL stays .../<widget>.js (stable). This loader is regenerated
+# each publish with the current hashed Angular entry filenames — never rename
+# runtime/polyfills/scripts/main to fixed names on dist (jsDelivr caches those
+# aggressively and purge is unreliable; hashed names bust cache automatically).
 pushd "${WORKTREE_DIR}/${WIDGET}" > /dev/null
-INDEX_HTML="index.html"
-for prefix in runtime polyfills scripts main; do
-  hashed_file=$(ls "${prefix}".*.js 2>/dev/null | head -1)
-  if [[ -n "$hashed_file" ]]; then
-    mv "$hashed_file" "${prefix}.js"
-    sed -i.bak "s#${hashed_file}#${prefix}.js#g" "$INDEX_HTML"
+RUNTIME_JS=$(ls runtime.*.js 2>/dev/null | head -1)
+POLYFILLS_JS=$(ls polyfills.*.js 2>/dev/null | head -1)
+SCRIPTS_JS=$(ls scripts.*.js 2>/dev/null | head -1)
+MAIN_JS=$(ls main.*.js 2>/dev/null | head -1)
+STYLES_CSS=$(ls styles.*.css 2>/dev/null | head -1)
+for required in RUNTIME_JS POLYFILLS_JS SCRIPTS_JS MAIN_JS STYLES_CSS; do
+  if [[ -z "${!required}" ]]; then
+    echo "Error: missing ${required#*_} in dist/${WIDGET} build output." >&2
+    exit 1
   fi
 done
-hashed_css=$(ls styles.*.css 2>/dev/null | head -1)
-if [[ -n "$hashed_css" ]]; then
-  mv "$hashed_css" "styles.css"
-  sed -i.bak "s#${hashed_css}#styles.css#g" "$INDEX_HTML"
-fi
-rm -f "${INDEX_HTML}.bak"
 popd > /dev/null
 
-# Single customer-facing entry point (<script type="module" src=".../<widget>.js">),
-# mirroring the old vanilla-JS widget's one-script integration — internally
-# sequences loading of the renamed bundles above. Copied (not moved) from a
-# version-controlled template so it's reviewable/diffable like any other file.
-# (cwd is the repo root here — pushd/popd above only affected the directory
-# stack inside the worktree, not this shell's own working directory.)
-cp "scripts/widget-loader.template.js" "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
+sed -e "s#__RUNTIME_JS__#${RUNTIME_JS}#" \
+    -e "s#__POLYFILLS_JS__#${POLYFILLS_JS}#" \
+    -e "s#__SCRIPTS_JS__#${SCRIPTS_JS}#" \
+    -e "s#__MAIN_JS__#${MAIN_JS}#" \
+    -e "s#__STYLES_CSS__#${STYLES_CSS}#" \
+    "scripts/widget-loader.template.js" > "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
 
 pushd "$WORKTREE_DIR" > /dev/null
 git add -A

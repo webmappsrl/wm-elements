@@ -9,6 +9,11 @@
 // — it's how this file finds its sibling bundles regardless of where it's
 // hosted (jsDelivr, a local static server, ...), without needing any global
 // config or a second attribute on the customer's <script> tag.
+//
+// publish-dist.sh injects the hashed Angular entry filenames below at publish
+// time (never renames them to fixed runtime.js/main.js on the dist branch).
+// The customer's <script src> stays stable; only this loader changes each
+// deploy, avoiding stale CDN/browser caches of fixed entry bundle names.
 (function () {
   const base = new URL('.', import.meta.url).href;
 
@@ -34,14 +39,12 @@
     });
   }
 
-  loadStyle('styles.css');
-  // Loaded strictly in sequence: `runtime.js` sets up Webpack's module
-  // registry, `polyfills.js` (zone.js) must run before Angular code executes,
-  // `scripts.js` (graphhopper-client) before `main.js`, which bootstraps the
-  // actual <wm-layer-map> custom element.
-  loadScript('runtime.js')
-    .then(() => loadScript('polyfills.js'))
-    .then(() => loadScript('scripts.js', {module: false}))
-    .then(() => loadScript('main.js'))
+  loadStyle('__STYLES_CSS__');
+  // Loaded strictly in sequence: runtime sets up Webpack's module registry,
+  // polyfills (zone.js) before Angular, scripts (graphhopper) before main.
+  loadScript('__RUNTIME_JS__')
+    .then(() => loadScript('__POLYFILLS_JS__'))
+    .then(() => loadScript('__SCRIPTS_JS__', {module: false}))
+    .then(() => loadScript('__MAIN_JS__'))
     .catch(err => console.error('[wm-elements] failed to load widget bundle:', err));
 })();
