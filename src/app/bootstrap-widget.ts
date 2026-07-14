@@ -13,20 +13,45 @@ import {LocalUrlHandlerService} from './services/local-url-handler.service';
 import {fakeActivatedRoute} from './services/fake-activated-route';
 import {WmLayerMapComponent} from './wm-layer-map/wm-layer-map.component';
 
-// Some third-party pages (observed with an online HTML preview tool) insert
-// the <wm-layer-map> tag's attributes slightly AFTER the tag itself exists in
-// the DOM — a single synchronous querySelector at this point can find the
-// element with no `shard`/`app-id` yet, silently falling back to defaults
-// ('geohub'/NaN). Wait for `shard` to appear via MutationObserver (works in
-// hidden tabs/iframes where requestAnimationFrame is suspended) with a
-// setTimeout fallback poll before giving up.
-function findHostWithShard(): Element | null {
-  const el = document.querySelector('wm-layer-map');
-  return el?.getAttribute('shard') ? el : null;
+type HostConfig = {shardName: ShardName; appId: number};
+
+function readHostConfig(el: Element): HostConfig | null {
+  const host = el as HTMLElement & {shard?: string; appId?: string};
+  const shard = el.getAttribute('shard') ?? host.shard ?? null;
+  const appIdRaw = el.getAttribute('app-id') ?? host.appId ?? null;
+  if (!shard || appIdRaw == null || appIdRaw === '') {
+    return null;
+  }
+  const appId = Number(appIdRaw);
+  if (Number.isNaN(appId)) {
+    return null;
+  }
+  return {shardName: shard as ShardName, appId};
 }
 
-function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
-  const ready = findHostWithShard();
+function findReadyHost(candidates: Iterable<Element> = document.querySelectorAll('wm-layer-map')): Element | null {
+  for (const el of candidates) {
+    if (el.isConnected && readHostConfig(el)) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function waitForDocumentReady(): Promise<void> {
+  if (document.readyState !== 'loading') {
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    document.addEventListener('DOMContentLoaded', () => resolve(), {once: true});
+  });
+}
+
+function waitForHostElement(
+  candidates: Element[],
+  timeoutMs = 30000,
+): Promise<Element | null> {
+  const ready = findReadyHost(candidates);
   if (ready) {
     return Promise.resolve(ready);
   }
@@ -45,7 +70,7 @@ function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
     };
 
     const check = (): boolean => {
-      const el = findHostWithShard();
+      const el = findReadyHost(candidates);
       if (el) {
         finish(el);
         return true;
@@ -69,7 +94,7 @@ function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
         return;
       }
       if (Date.now() >= deadline) {
-        finish(document.querySelector('wm-layer-map'));
+        finish(null);
         return;
       }
       timer = setTimeout(poll, 50);
@@ -78,26 +103,42 @@ function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
   });
 }
 
-(async () => {
-  const hostElement = await waitForHostElement();
-  const shardName = (hostElement?.getAttribute('shard') ?? 'geohub') as ShardName;
-  const appId = Number(hostElement?.getAttribute('app-id') ?? '0');
-  const hostname = window.location.hostname;
+function buildEnvironment(config: HostConfig): Environment {
+  const {shardName, appId} = config;
 
   // EnvironmentService (wm-core) resolves shard/appId from window.location.hostname,
   // designed for the webapp's per-subdomain hosting model. For an embeddable widget
-  // running on an arbitrary third-party domain, we force resolution via the existing
-  // `redirects` mechanism instead of touching wm-core: a redirect entry that always
-  // matches the current hostname, pointing to the shard/appId passed as HTML attributes.
-  const environment: Environment = {
+  // on an arbitrary third-party domain we must force resolution via `redirects`.
+  // An empty-string key always matches (`hostname.includes('')` is true for every
+  // hostname), so EnvironmentService never falls through to the geohub/NaN branch.
+  // `environment.appId`/`shardName` are still set for the localhost shortcut branch.
+  return {
     production: true,
     appId,
     shardName,
     shards,
     redirects: {
-      [hostname]: {shardName, appId},
+      '': {shardName, appId},
     },
   };
+}
+
+export async function bootstrapWidget(hostCandidates: Element[] = []): Promise<void> {
+  if (customElements.get('wm-layer-map')) {
+    return;
+  }
+
+  await waitForDocumentReady();
+  const hostElement = await waitForHostElement(hostCandidates);
+  const hostConfig = hostElement ? readHostConfig(hostElement) : null;
+  if (!hostConfig) {
+    console.error(
+      '[wm-layer-map] bootstrap aborted: <wm-layer-map> with valid shard and app-id was not found.',
+    );
+    return;
+  }
+
+  const environment = buildEnvironment(hostConfig);
 
   const app = await createApplication({
     providers: [
@@ -119,4 +160,6 @@ function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
 
   const wmLayerMapElement = createCustomElement(WmLayerMapComponent, {injector: app.injector});
   customElements.define('wm-layer-map', wmLayerMapElement);
-})();
+}
+
+void bootstrapWidget([...document.querySelectorAll('wm-layer-map')]);

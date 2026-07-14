@@ -11,4 +11,9 @@ import {ensureSafeStorage} from './app/services/ensure-safe-storage';
 // guarantee the shim below applies first.
 ensureSafeStorage();
 
-import('./app/bootstrap-widget');
+// Snapshot host elements while main.js evaluates (document is already parsed
+// because this module is loaded deferred at the end of the loader chain).
+// bootstrap-widget re-reads shard/app-id from these nodes right before
+// createApplication so EnvironmentService is wired to the actual embed attrs.
+const hostCandidates = [...document.querySelectorAll('wm-layer-map')];
+import('./app/bootstrap-widget').then(m => m.bootstrapWidget(hostCandidates));
