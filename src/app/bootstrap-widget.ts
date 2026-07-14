@@ -13,8 +13,26 @@ import {LocalUrlHandlerService} from './services/local-url-handler.service';
 import {fakeActivatedRoute} from './services/fake-activated-route';
 import {WmLayerMapComponent} from './wm-layer-map/wm-layer-map.component';
 
+// Some third-party pages (observed with an online HTML preview tool) insert
+// the <wm-layer-map> tag's attributes slightly AFTER the tag itself exists in
+// the DOM — a single synchronous querySelector at this point can find the
+// element with no `shard`/`app-id` yet, silently falling back to defaults
+// ('geohub'/NaN). Poll briefly for a `shard` attribute to actually appear
+// before giving up, instead of trusting a one-shot snapshot.
+async function waitForHostElement(timeoutMs = 2000): Promise<Element | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const el = document.querySelector('wm-layer-map');
+    if (el?.getAttribute('shard')) {
+      return el;
+    }
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+  return document.querySelector('wm-layer-map');
+}
+
 (async () => {
-  const hostElement = document.querySelector('wm-layer-map');
+  const hostElement = await waitForHostElement();
   const shardName = (hostElement?.getAttribute('shard') ?? 'geohub') as ShardName;
   const appId = Number(hostElement?.getAttribute('app-id') ?? '0');
   const hostname = window.location.hostname;
