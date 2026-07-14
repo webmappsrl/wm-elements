@@ -98,16 +98,38 @@ cp "scripts/widget-loader.template.js" "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
 
 pushd "$WORKTREE_DIR" > /dev/null
 git add -A
-git commit -m "chore: publish ${WIDGET} dist bundle (${TAG})"
-git tag "$TAG"
-git push origin HEAD:dist
-git push origin "$TAG"
+if git diff --cached --quiet; then
+  echo "Nessuna modifica al bundle ${WIDGET} — skip commit/tag, purge cache comunque."
+else
+  git commit -m "chore: publish ${WIDGET} dist bundle (${TAG})"
+  git tag "$TAG"
+  git push origin HEAD:dist
+  git push origin "$TAG"
+fi
 popd > /dev/null
+
+# jsDelivr caches fixed entry filenames (runtime.js, main.js, ...) across deploys.
+# A stale runtime.js still points at deleted lazy chunks after a new publish.
+# Purge every file we just pushed so the stable @dist URL updates immediately.
+echo ""
+echo "Purge cache jsDelivr..."
+CDN_BASE="/gh/webmappsrl/wm-elements@dist/${WIDGET}"
+for published_file in "${WORKTREE_DIR}/${WIDGET}"/*; do
+  if [[ -f "$published_file" ]]; then
+    file_name=$(basename "$published_file")
+    if curl -sf "https://purge.jsdelivr.net${CDN_BASE}/${file_name}" > /dev/null; then
+      echo "  purged: ${file_name}"
+    else
+      echo "  purge fallita (non bloccante): ${file_name}" >&2
+    fi
+  fi
+done
 
 git worktree remove "$WORKTREE_DIR" --force
 
 echo ""
 echo "Pubblicato: branch 'dist' aggiornato (sottocartella '${WIDGET}/'), tag '$TAG' creato."
-echo "URL jsDelivr stabile (propagazione fino a qualche minuto dopo il primo deploy):"
+echo "URL jsDelivr stabile:"
 echo "  https://cdn.jsdelivr.net/gh/webmappsrl/wm-elements@dist/${WIDGET}/${WIDGET}.js"
+echo "Cache jsDelivr purgata per tutti i file pubblicati in dist/${WIDGET}/."
 echo "Per il rollback: ripunta 'dist' a un tag precedente (git push origin <tag>:dist --force), mai un push distruttivo diretto."
