@@ -10,8 +10,10 @@ import {UrlHandlerService} from '@wm-core/services/url-handler.service';
 import {WmCoreModule} from '@wm-core/wm-core.module';
 import {shards, Environment, ShardName} from '@wm-types/environment';
 import {LocalUrlHandlerService} from './services/local-url-handler.service';
+import {WidgetEnvironmentService} from './services/widget-environment.service';
 import {fakeActivatedRoute} from './services/fake-activated-route';
 import {WmLayerMapComponent} from './wm-layer-map/wm-layer-map.component';
+import {EnvironmentService} from '@wm-core/services/environment.service';
 
 type HostConfig = {shardName: ShardName; appId: number};
 
@@ -105,25 +107,12 @@ function waitForHostElement(
 
 function buildEnvironment(config: HostConfig): Environment {
   const {shardName, appId} = config;
-  const hostname = window.location.hostname;
-  const redirect = {shardName, appId};
-
-  // EnvironmentService (wm-core) resolves shard/appId from window.location.hostname,
-  // designed for the webapp's per-subdomain hosting model. For an embeddable widget
-  // on an arbitrary third-party domain we force resolution via `redirects`.
-  // IMPORTANT: the matched redirect key must be truthy — `else if (matchedHost)`
-  // in EnvironmentService treats `''` as false even though `hostname.includes('')`
-  // is always true. Use the actual hostname (truthy on real embed domains) plus
-  // `'.'` as a fallback for hostnames that contain a dot.
   return {
     production: true,
     appId,
     shardName,
     shards,
-    redirects: {
-      ...(hostname ? {[hostname]: redirect} : {}),
-      '.': redirect,
-    },
+    redirects: {},
   };
 }
 
@@ -164,6 +153,7 @@ async function bootstrapWidgetOnce(hostCandidates: Element[]): Promise<void> {
         }),
       ),
       {provide: UrlHandlerService, useClass: LocalUrlHandlerService},
+      {provide: EnvironmentService, useClass: WidgetEnvironmentService},
       {provide: ActivatedRoute, useValue: fakeActivatedRoute},
     ],
   });
