@@ -10,7 +10,10 @@ import {WmCoreModule} from '@wm-core/wm-core.module';
 import {shards, Environment} from '@wm-types/environment';
 import {LocalUrlHandlerService} from './app/services/local-url-handler.service';
 import {fakeActivatedRoute} from './app/services/fake-activated-route';
+import {ensureSafeStorage} from './app/services/ensure-safe-storage';
 import {DemoComponent} from './app/demo/demo.component';
+
+ensureSafeStorage();
 
 // EnvironmentService.init() runs once at bootstrap (via APP_INITIALIZER in
 // WmCoreModule.forRoot) and resolves shard/appId from this static object —

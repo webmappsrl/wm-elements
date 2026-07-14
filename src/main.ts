@@ -11,7 +11,10 @@ import {WmCoreModule} from '@wm-core/wm-core.module';
 import {shards, Environment, ShardName} from '@wm-types/environment';
 import {LocalUrlHandlerService} from './app/services/local-url-handler.service';
 import {fakeActivatedRoute} from './app/services/fake-activated-route';
+import {ensureSafeStorage} from './app/services/ensure-safe-storage';
 import {WmLayerMapComponent} from './app/wm-layer-map/wm-layer-map.component';
+
+ensureSafeStorage();
 
 (async () => {
   const hostElement = document.querySelector('wm-layer-map');

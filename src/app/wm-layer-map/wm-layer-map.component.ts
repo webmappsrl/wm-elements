@@ -129,9 +129,23 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
           return of([] as WmFeature<Point>[]);
         }
         return forkJoin(hits.map(hit => this._ecSvc.getEcTrack(hit.id))).pipe(
-          map((tracks: WmFeature<any>[]) =>
-            tracks.flatMap(t => (t?.properties?.related_pois as WmFeature<Point>[]) ?? []),
-          ),
+          map((tracks: WmFeature<any>[]) => {
+            const allPois = tracks.flatMap(
+              t => (t?.properties?.related_pois as WmFeature<Point>[]) ?? [],
+            );
+            // Adjacent tappe of the same cammino can share a junction POI —
+            // present in both tracks' own related_pois. Deduplicated by id,
+            // otherwise map-core's pois.directive throws ("feature already
+            // added to source") trying to add the same POI twice to the same
+            // OL vector source, aborting the whole map render.
+            const seen = new Set<number>();
+            return allPois.filter(f => {
+              const id = f?.properties?.id;
+              if (id == null || seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            });
+          }),
         );
       }),
     ),
