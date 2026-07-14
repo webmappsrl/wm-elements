@@ -11,15 +11,14 @@
 // config or a second attribute on the customer's <script> tag.
 //
 // This file is intentionally static: publish-dist.sh copies it as-is on every
-// deploy. Hashed Angular entry filenames live in entries.json (updated each
-// publish) and are fetched from raw.githubusercontent.com so jsDelivr's
-// aggressive branch cache on @dist never blocks a deploy — only this loader
-// URL stays on the CDN, and its content never changes after the first publish.
+// deploy. Hashed Angular entry filenames are resolved at runtime via the
+// jsDelivr Data API (https://www.jsdelivr.com/docs/data.jsdelivr.com) so the
+// stable @dist <widget>.js URL never needs to change — only hashed bundles do.
 (function () {
   const base = new URL('.', import.meta.url).href;
   const widgetName = new URL(import.meta.url).pathname.split('/').pop().replace(/\.js$/, '');
-  const manifestUrl =
-    `https://raw.githubusercontent.com/webmappsrl/wm-elements/dist/${widgetName}/entries.json`;
+  const packageIndexUrl =
+    'https://data.jsdelivr.com/v1/package/gh/webmappsrl/wm-elements@dist/flat';
 
   function loadStyle(href) {
     const link = document.createElement('link');
@@ -43,6 +42,27 @@
     });
   }
 
+  function resolveEntries(files) {
+    const prefix = `/${widgetName}/`;
+    const pick = (pattern) => {
+      const entry = files.find(
+        (f) => f.name.startsWith(prefix) && pattern.test(f.name.slice(prefix.length)),
+      );
+      return entry ? entry.name.slice(prefix.length) : null;
+    };
+    const entries = {
+      runtime: pick(/^runtime\.[^/]+\.js$/),
+      polyfills: pick(/^polyfills\.[^/]+\.js$/),
+      scripts: pick(/^scripts\.[^/]+\.js$/),
+      main: pick(/^main\.[^/]+\.js$/),
+      styles: pick(/^styles\.[^/]+\.css$/),
+    };
+    for (const [key, value] of Object.entries(entries)) {
+      if (!value) throw new Error(`missing ${key} in jsDelivr package index`);
+    }
+    return entries;
+  }
+
   function loadBundles(entries) {
     loadStyle(entries.styles);
     // Loaded strictly in sequence: runtime sets up Webpack's module registry,
@@ -53,11 +73,11 @@
       .then(() => loadScript(entries.main));
   }
 
-  fetch(manifestUrl, {cache: 'no-store'})
-    .then(r => {
-      if (!r.ok) throw new Error(`manifest HTTP ${r.status}`);
+  fetch(packageIndexUrl, {cache: 'no-store'})
+    .then((r) => {
+      if (!r.ok) throw new Error(`package index HTTP ${r.status}`);
       return r.json();
     })
-    .then(loadBundles)
-    .catch(err => console.error('[wm-elements] failed to load widget bundle:', err));
+    .then(({files}) => loadBundles(resolveEntries(files)))
+    .catch((err) => console.error('[wm-elements] failed to load widget bundle:', err));
 })();
