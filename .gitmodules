@@ -1,0 +1,9 @@
+[submodule "src/app/shared/map-core"]
+	path = src/app/shared/map-core
+	url = https://github.com/webmappsrl/map-core.git
+[submodule "src/app/shared/wm-core"]
+	path = src/app/shared/wm-core
+	url = https://github.com/webmappsrl/wm-core.git
+[submodule "src/app/shared/wm-types"]
+	path = src/app/shared/wm-types
+	url = https://github.com/webmappsrl/wm-types.git
