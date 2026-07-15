@@ -10,8 +10,11 @@ const MAP_READY_POLL_MAX_ATTEMPTS = 40; // ~2s
  * Sostituisce la View OL corrente con una vincolata al bbox del layer:
  * centraggio istantaneo (nessuna animazione) e blocco del dezoom oltre
  * il livello del fit iniziale. Il pan resta vincolato al bbox tramite
- * `extent` + `constrainOnlyCenter`. Il maxZoom resta invariato (zoom-in
- * libero).
+ * `extent` con `constrainOnlyCenter: false` (vincola l'intero viewport
+ * visibile, non solo il punto centrale — con `constrainOnlyCenter: true`
+ * il centro resta dentro il bbox ma i bordi della vista possono comunque
+ * mostrare area oltre il bbox per metà della larghezza/altezza del
+ * viewport). Il maxZoom resta invariato (zoom-in libero).
  */
 @Directive({
   selector: '[wmLayerMap]',
@@ -56,7 +59,7 @@ export class WmLayerMapDirective {
     const view = new View({
       projection: 'EPSG:3857',
       extent,
-      constrainOnlyCenter: true,
+      constrainOnlyCenter: false,
       showFullExtent: true,
       maxZoom,
     });
