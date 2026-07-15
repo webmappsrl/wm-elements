@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
@@ -45,9 +46,9 @@ import {
 import {ICONS} from '@wm-types/config';
 import {loadIcons} from '@wm-core/store/icons/icons.actions';
 import {icons} from '@wm-core/store/icons/icons.selector';
-import {BehaviorSubject, combineLatest, forkJoin, Observable, of} from 'rxjs';
+import {BehaviorSubject, combineLatest, forkJoin, Observable, of, ReplaySubject} from 'rxjs';
 import {filter, map, switchMap, take} from 'rxjs/operators';
-import {IDATALAYER, ILAYER} from '@map-core/types/layer';
+import {IDATALAYER} from '@map-core/types/layer';
 import {
   chartHoverElements,
   ecLayer,
@@ -63,6 +64,7 @@ import {WmSlopeChartHoverElements} from '@wm-types/slope-chart';
 import {EnvironmentService} from '@wm-core/services/environment.service';
 import {LangService} from '@wm-core/localization/lang.service';
 import {confAPP} from '@wm-core/store/conf/conf.selector';
+import {ILAYER} from '@wm-core/types/config';
 import {WidgetBrandingService, WidgetPlatform} from '../services/widget-branding.service';
 import {WmLayerMapDirective} from './directives/wm-layer-map.directive';
 import {FeatureLike} from 'ol/Feature';
@@ -92,7 +94,7 @@ const maxWidth = 600;
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.ShadowDom,
 })
-export class WmLayerMapComponent implements OnInit, OnDestroy {
+export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() shard!: string;
   @Input('app-id') appId!: string;
   @Input('layer-id') layerId!: string;
@@ -112,6 +114,14 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
   WmMapTrackRelatedPoisDirective: WmMapTrackRelatedPoisDirective;
 
   @ViewChild(WmLayerMapDirective) private _wmLayerMapDirective: WmLayerMapDirective;
+
+  // Se lo store NgRx ha già `isConfLoaded === true` al momento della
+  // subscribe (es. istanza riavviata nella demo, store condiviso tra
+  // mount successivi), la pipeline sotto emette in modo sincrono dentro
+  // ngOnInit — prima che Angular abbia risolto il @ViewChild sopra
+  // (garantito solo a partire da ngAfterViewInit). Questo gate impedisce
+  // di leggere `_wmLayerMapDirective` prima che sia valorizzato.
+  private _afterViewInit$ = new ReplaySubject<void>(1);
 
   apiElasticState$: Observable<any> = this._store.select(mapFilters);
   confJIDOUPDATETIME$: Observable<any> = this._store.select(confJIDOUPDATETIME);
@@ -348,7 +358,7 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
             return;
           }
           if (layer.bbox != null) {
-            combineLatest([this.confMap$, this.mapPadding$])
+            combineLatest([this.confMap$, this.mapPadding$, this._afterViewInit$])
               .pipe(take(1))
               .subscribe(([conf, currentPadding]) => {
                 this._wmLayerMapDirective.apply(
@@ -362,6 +372,10 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
           this.ready.emit();
         });
       });
+  }
+
+  ngAfterViewInit(): void {
+    this._afterViewInit$.next();
   }
 
   ngOnDestroy(): void {
