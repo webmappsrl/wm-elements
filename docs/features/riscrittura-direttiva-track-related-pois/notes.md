@@ -20,16 +20,14 @@ Divergenze consapevoli dalla legacy (documentate anche nella self-review del pia
 - **Guardia su `wmMapEmptyClickEVT$`**: è un `ReplaySubject(1)` che ripropone l'ultimo click a vuoto alla subscribe — si emette deselezione solo se c'è una selezione attiva, altrimenti l'init deselezionrebbe da solo un deep-link.
 - **Reset traccia**: `related-poi(null)` viene emesso solo se c'era una selezione attiva, per non cancellare un deep-link `ec_related_poi` all'avvio (la traccia arriva dopo il parametro URL).
 
-## Diff locale submodule map-core (estraneo alla feature)
+## Errore TS2322 in map-core/src/utils/ol.ts (risolto con allineamento TypeScript)
 
-`src/app/shared/map-core/src/utils/ol.ts` ha un diff locale **non committato** in `_loadVectorTileBuffer`: copia dei byte in un nuovo `ArrayBuffer` invece di ritornare `.buffer` della vista Uint8Array (fix per un mismatch di tipo/offset sul buffer cache-ato in localStorage). Non è parte di questa feature:
+`_loadVectorTileBuffer` (`return stringToUint8Array(cached).buffer`) non compilava **solo in questo repo**: con TypeScript 5.9 le lib tipizzano `Uint8Array.buffer` come `ArrayBufferLike` e `SharedArrayBuffer` non è più assegnabile ad `ArrayBuffer` (narrowing di `[Symbol.toStringTag]`). wm-webapp compila lo stesso file senza errori perché usa TS 5.8.
 
-- NON scartarlo con checkout/reset del submodule.
-- Follow-up: proporlo upstream a `webmappsrl/map-core` come PR separata.
+Cronologia: esisteva un workaround locale non committato nel submodule (copia dei byte in un nuovo `ArrayBuffer`), andato perso durante la sessione (discard IDE, non da comandi git di questo workflow). **Risoluzione definitiva**: TypeScript allineato a wm-webapp — `typescript@~5.8.0` in `package.json` (installato 5.8.3, identico a wm-webapp). Il submodule compila pulito senza alcuna modifica locale. Nessuna PR upstream più necessaria per questo punto (l'errore riapparirebbe solo se wm-elements aggiornasse TS a ≥5.9 prima di map-core).
 
 ## Follow-up
 
 - **Porting in map-core**: intenzione dichiarata del dev di portare in futuro la nuova direttiva (e le sue funzioni pure) upstream in map-core. Per questo il modulo marker è stato chiamato `directives/ol.ts`, stessa convenzione di `map-core/src/utils/ol.ts` — segnala che i due file sono omologhi e destinati a convergere.
-- Proporre upstream il fix `ol.ts` del submodule di cui sopra (ciclo separato).
 - Verifica manuale completa (Task 5 del piano: scenari demo, check memoria, smoke test superficie non usata con binding temporanei, build cross-origin) — da eseguire dal developer; le parti automatizzabili (tsc, grep legacy, build elements, sync test page) sono già passate.
 - Il selettore `currentRelatedPoi$` esposto dalla direttiva non è consumato dal widget (che usa lo store `currentEcRelatedPoi`): mantenuto per parità di firma, valutare in futuro se rimuoverlo.
