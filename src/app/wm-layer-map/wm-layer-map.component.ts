@@ -435,10 +435,11 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   // wmMapPois il comportamento errato resta). Coordinazione URL/store nel widget.
   /** Deseleziona related POI e azzera lo stato URL/store. */
   deselectAllPois(): void {
+    this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
     if (this.WmMapTrackRelatedPoisDirective != null) {
       this.WmMapTrackRelatedPoisDirective.setPoi = -1;
     }
-    this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
+    this.resetSelectedPoi$.next(!this.resetSelectedPoi$.value);
     this._clearGenericPoiMarker();
   }
 
@@ -470,11 +471,10 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   setPoi(poi: WmFeature<Point>): void {
+    this._urlHandlerSvc.updateURL({poi: poi?.properties?.id ? +poi.properties.id : undefined});
     if (this.WmMapTrackRelatedPoisDirective != null) {
       this.WmMapTrackRelatedPoisDirective.setPoi = -1;
     }
-    const id = poi?.properties?.id ?? null;
-    this._urlHandlerSvc.updateURL({poi: id ? +id : undefined});
   }
 
   private _clearGenericPoiMarker(): void {

@@ -1,0 +1,18 @@
+---
+description: Leggi e segui CLAUDE.md all'inizio di ogni sessione su wm-elements
+alwaysApply: true
+---
+
+# Contesto progetto wm-elements
+
+All'inizio di ogni conversazione su questo repo, **leggi `CLAUDE.md` alla root** con il tool Read prima di esplorare codice, modificare file o proporre fix.
+
+Punti critici da rispettare (dettaglio completo in CLAUDE.md):
+
+- Widget Angular Elements embeddabili; parità visibile con `wm-webapp` / `webmapp-app` a parità di shard/layer
+- Build per widget (`npm run build:<widget>`, mai `ng build` generico); dev con `npm run start:demo`
+- `LocalUrlHandlerService` al posto del Router reale; store NgRx montato per intero da wm-core
+- Submodule `map-core` / `wm-core` / `wm-types`: **non modificare** salvo bug condivisi documentati; riferimento canonico in wm-webapp/webmapp-app
+- Node `>=20.19.0` via `nvm use` in ogni nuova shell
+
+Se CLAUDE.md e il codice divergono, segnala la discrepanza prima di assumere comportamento intenzionale.
