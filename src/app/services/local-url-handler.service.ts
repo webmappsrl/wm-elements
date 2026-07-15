@@ -7,6 +7,7 @@ import {
   currentEcTrackId,
   currentEcPoiId,
   currentEcRelatedPoiId,
+  currentEcImageGalleryIndex,
 } from '@wm-core/store/features/ec/ec.actions';
 import {closeUgc, closeDownloads} from '@wm-core/store/user-activity/user-activity.action';
 
@@ -129,5 +130,18 @@ export class LocalUrlHandlerService {
     this._store.dispatch(
       currentEcRelatedPoiId({currentRelatedPoiId: params.ec_related_poi ?? null}),
     );
+    // `wm-image-detail` (contenuto del modal galleria) è avvolto da un *ngIf
+    // su questo slice: senza dispatch resterebbe `undefined` → `undefined + 1
+    // = NaN` → modal bianco. Check `!= null` e non truthy come nella webapp:
+    // lì i param URL sono stringhe ('0' è truthy), qui sono valori raw e la
+    // prima foto ha indice 0.
+    this._store.dispatch(
+      currentEcImageGalleryIndex({
+        currentEcImageGalleryIndex: params.gallery_index != null ? +params.gallery_index : null,
+      }),
+    );
+    // Omissioni deliberate rispetto al vero UrlHandlerService.initialize():
+    // currentUgcTrackId, currentUgcPoiId e inputTyped non vengono dispatchati
+    // perché UGC e ricerca sono feature fuori scope del widget.
   }
 }

@@ -56,7 +56,7 @@ import {
   mapFilters,
 } from '@wm-core/store/user-activity/user-activity.selector';
 import {WmFeature} from '@wm-types/feature';
-import {Point} from 'geojson';
+import {Point, LineString} from 'geojson';
 import {WmMapPoisDirective, WmMapTrackRelatedPoisDirective} from '@map-core/directives';
 import {UrlHandlerService} from '@wm-core/services/url-handler.service';
 import {Actions, ofType} from '@ngrx/effects';
@@ -67,6 +67,9 @@ import {confAPP} from '@wm-core/store/conf/conf.selector';
 import {ILAYER} from '@wm-core/types/config';
 import {WidgetBrandingService, WidgetPlatform} from '../services/widget-branding.service';
 import {WmLayerMapDirective} from './directives/wm-layer-map.directive';
+import {ensureGalleryModalGlobalStyles} from './gallery-modal-global-styles';
+import {ensureIoniconsSetup} from './ionicons-setup';
+import {WmLayerMapPoiPanelComponent} from './wm-layer-map-poi-panel.component';
 import {FeatureLike} from 'ol/Feature';
 import {ZoomFeaturesInViewport} from '@wm-types/config';
 import {WmCoreModule} from '@wm-core/wm-core.module';
@@ -88,7 +91,7 @@ const maxWidth = 600;
 @Component({
   selector: 'app-wm-layer-map-root',
   standalone: true,
-  imports: [CommonModule, WmCoreModule, IonicModule, WmLayerMapDirective],
+  imports: [CommonModule, WmCoreModule, IonicModule, WmLayerMapDirective, WmLayerMapPoiPanelComponent],
   templateUrl: './wm-layer-map.component.html',
   styleUrl: './wm-layer-map.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -157,6 +160,15 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   // dispatchare `loadEcPois()` questo selector risultava sempre vuoto —
   // corretto lì, non qui: nessuna logica custom di lookup necessaria.
   currentPoi$ = this._store.select(poi);
+  showRelatedPoiNav$ = combineLatest([this.currentRelatedPoiID$, this.ecTrack$]).pipe(
+    map(([relatedId, track]) => {
+      if (relatedId == null) {
+        return false;
+      }
+      const relatedPois = (track as WmFeature<LineString> | null)?.properties?.related_pois;
+      return Array.isArray(relatedPois) && relatedPois.length > 1;
+    }),
+  );
   loading$: Observable<boolean> = this._store.select(loading);
   mapPadding$ = this._store.select(padding);
   refreshLayer$: Observable<any>;
@@ -267,6 +279,11 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
       scratchCanvas.style.display = 'none';
       document.body.appendChild(scratchCanvas);
     }
+
+    // ion-modal e ion-icon vivono fuori dallo Shadow DOM: servono asset path /
+    // registrazione icone (ionicons-setup) e stili globali del modal galleria.
+    ensureIoniconsSetup();
+    ensureGalleryModalGlobalStyles();
 
     // Fullscreen custom: a differenza del controllo OL nativo (che mette in
     // fullscreen solo il contenitore interno della mappa, `map.getTargetElement()`,
@@ -442,6 +459,14 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   unselectPoi(): void {
     this.deselectAllPois();
+  }
+
+  poiPrev(): void {
+    this.WmMapTrackRelatedPoisDirective?.poiPrev();
+  }
+
+  poiNext(): void {
+    this.WmMapTrackRelatedPoisDirective?.poiNext();
   }
 
   setPoi(poi: WmFeature<Point>): void {
