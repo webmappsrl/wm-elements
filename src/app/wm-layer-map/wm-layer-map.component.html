@@ -138,7 +138,6 @@
     [wmMapLayerEnableFeaturesInViewport]="confOPTIONSShowFeaturesInViewport$|async"
     [wmMapLayerShowFeaturesInViewport]="showFeaturesInViewport$|async"
     [wmMapLayerZoomFeaturesInViewport]="zoomFeaturesInViewport$|async"
-    (colorSelectedFromLayerEVT)="trackColor$.next($event)"
     (featuresInViewportEVT)="featuresInViewport($event)"
     wmMapPois
     [wmMapPoisPoi]="currentEcPoiId$|async"

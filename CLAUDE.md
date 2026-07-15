@@ -14,6 +14,14 @@ Webcomponent embeddabili Webmapp costruiti con Angular Elements, che riusano i c
   - `src/app/shared/wm-core` — store, servizi, componenti UI condivisi (pannello dettaglio, slope chart, POI)
   - `src/app/shared/wm-types` — tipi TypeScript condivisi
 
+## Riferimento ad altri repo per map-core/wm-core
+
+Per qualsiasi dubbio implementativo su come usare correttamente componenti/direttive/selector di `map-core` o `wm-core` (pattern d'uso, wiring dello store, edge case non ovvi dai soli sorgenti dei submodule), ispezionare i repo `wm-webapp` e `webmapp-app` — sono le app reali che consumano gli stessi submodule e mostrano l'uso "canonico" di riferimento. La loro posizione varia da utente a utente: localizzarli con una `find` prima di usarli, ad esempio `find ~ -maxdepth 4 -type d \( -name wm-webapp -o -name webmapp-app \) 2>/dev/null`.
+
+## Parità di comportamento con webapp/app mobile
+
+Qualsiasi comportamento visibile del widget (colori, zoom, interazioni, dati mostrati, ecc.) che risulti **diverso** da quello della webapp (`wm-webapp`) o dell'app mobile (`webmapp-app`), a parità di shard/app/layer, è **da considerare un bug o un errore di configurazione**, mai una variazione accettabile "di prodotto". Il widget riusa gli stessi submodule (`map-core`/`wm-core`) e gli stessi dati/config delle altre app: se il rendering diverge, la causa è quasi sempre in come `wm-elements` collega/consuma quei submodule (binding mancanti, default diversi, differenze di encapsulation come lo Shadow DOM), non un comportamento "intenzionalmente diverso". Quando si investiga una discrepanza, il riferimento va sempre cercato in `wm-webapp`/`webmapp-app` (vedi sezione sopra) prima di introdurre una spiegazione alternativa.
+
 ## Architettura submoduli
 
 Ordine di dipendenza: `wm-types` → `wm-core` → `wm-elements` (stessa convenzione di `wm-webapp`)
@@ -39,6 +47,15 @@ Nessuna suite automatica dedicata in questo repo (decisione presa in fase di des
 ## Sviluppo quotidiano
 
 Non modificare direttamente il bundle custom-element per iterare — non ha hot reload. Usa `npm run start:demo` (`ng serve --configuration=demo`): monta gli stessi componenti come normali componenti Angular bootstrappati in una pagina demo con controlli per gli attributi (`shard`, `app-id`, `layer-id`, ecc.), con reload istantaneo ad ogni modifica. La build "elements" (`npm run build:<widget>`, vedi sotto) va verificata solo prima di pubblicare o quando si tocca qualcosa di specifico del custom element (Shadow DOM, mapping attributi, eventi).
+
+**Versione Node richiesta**: Angular 20 CLI richiede Node `>=20.19.0` (vedi `.nvmrc` e `engines` in `package.json`). Se il sistema ha una versione più vecchia (es. Node 18, che fa fallire `ng serve`/`ng build` con un errore esplicito di versione minima), usare `nvm` invece di reinstallare Node globalmente:
+
+```sh
+nvm install   # legge .nvmrc, installa/scarica la versione se non già presente
+nvm use       # attiva quella versione nella shell corrente (va rifatto per ogni nuova shell)
+```
+
+`nvm use` va eseguito in ogni nuova sessione di shell prima di lanciare `npm run start:demo`/`npm run build:*`, perché non persiste tra shell diverse.
 
 ## Build multi-widget
 

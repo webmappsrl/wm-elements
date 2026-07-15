@@ -65,6 +65,7 @@ export class WmLayerMapDirective {
     });
 
     this._mapCmp.map.setView(view);
+    (this._mapCmp as any)._view = view;
 
     view.fit(extent, {duration: 0, padding, nearest: true});
     view.setMinZoom(view.getZoom());

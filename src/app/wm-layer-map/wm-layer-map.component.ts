@@ -46,8 +46,8 @@ import {
 import {ICONS} from '@wm-types/config';
 import {loadIcons} from '@wm-core/store/icons/icons.actions';
 import {icons} from '@wm-core/store/icons/icons.selector';
-import {BehaviorSubject, combineLatest, Observable, ReplaySubject} from 'rxjs';
-import {filter, map, take} from 'rxjs/operators';
+import {BehaviorSubject, combineLatest, Observable, ReplaySubject, Subject} from 'rxjs';
+import {distinctUntilChanged, filter, map, take, takeUntil} from 'rxjs/operators';
 import {IDATALAYER} from '@map-core/types/layer';
 import {
   chartHoverElements,
@@ -210,6 +210,7 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   isFullscreen = false;
+  private _destroy$ = new Subject<void>();
   private _onFullscreenChange = (): void => {
     this.isFullscreen = document.fullscreenElement === this._elementRef.nativeElement;
     this._cdr.markForCheck();
@@ -367,9 +368,34 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this._afterViewInit$.next();
+
+    // Quando lo store azzera `currentEcPoiId` (es. selezione traccia o
+    // related-poi via mutua esclusione URL), la direttiva pois non
+    // deseleziona da sola il marker: `setPoi(null)` non chiama
+    // `_selectIcon(null)` (guard `id > -1` con coercizione JS).
+    this._afterViewInit$
+      .pipe(take(1))
+      .subscribe(() => {
+        this.currentEcPoiId$
+          .pipe(distinctUntilChanged(), takeUntil(this._destroy$))
+          .subscribe(id => {
+            if (id == null) {
+              this._clearGenericPoiMarker();
+            }
+          });
+        this.currentRelatedPoiID$
+          .pipe(distinctUntilChanged(), takeUntil(this._destroy$))
+          .subscribe(id => {
+            if (id == null && this.WmMapTrackRelatedPoisDirective != null) {
+              this.WmMapTrackRelatedPoisDirective.setPoi = -1;
+            }
+          });
+      });
   }
 
   ngOnDestroy(): void {
+    this._destroy$.next();
+    this._destroy$.complete();
     document.removeEventListener('fullscreenchange', this._onFullscreenChange);
   }
 
@@ -388,35 +414,34 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this._store.dispatch(wmMapFeaturesInViewport({featureIds}));
   }
 
-  // Coordinazione incrociata fra i DUE layer di selezione indipendenti:
-  // wmMapPois (POI generali) e wmMapTrackRelatedPois (related-poi della
-  // traccia) hanno ciascuno un proprio `_selectedPoiLayer` privato e
-  // nessuno dei due pulisce quello dell'altro — senza queste chiamate
-  // esplicite restavano evidenziati due marker contemporaneamente (uno
-  // per layer). Si usano solo API pubbliche delle direttive, nessuna
-  // modifica al submodule: `setPoi = -1` (related, stesso meccanismo di
-  // geobox-map.unselectPOI() nella webapp) e `setPoi(null)` (pois, che
-  // internamente risolve in `_selectIcon(undefined)` → clearLayer).
+  // Bug related-poi isolato a wmMapTrackRelatedPois (verificato: senza
+  // wmMapPois il comportamento errato resta). Coordinazione URL/store nel widget.
+  /** Deseleziona related POI e azzera lo stato URL/store. */
+  deselectAllPois(): void {
+    if (this.WmMapTrackRelatedPoisDirective != null) {
+      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
+    }
+    this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
+    this._clearGenericPoiMarker();
+  }
+
   setCurrentRelatedPoi(feature: number | WmFeature<Point> | null): void {
     if (feature == null) {
       return;
     } else if (typeof feature === 'number') {
-      this._unselectGenericPoiMarker();
       this._urlHandlerSvc.updateURL({ec_related_poi: feature});
-      this.WmMapTrackRelatedPoisDirective.setPoi = feature;
+      if (this.WmMapTrackRelatedPoisDirective != null) {
+        this.WmMapTrackRelatedPoisDirective.setPoi = feature;
+      }
     } else if (feature.properties != null && feature.properties.id != null) {
-      const id = feature.properties.id;
-      this._unselectGenericPoiMarker();
-      this._urlHandlerSvc.updateURL({ec_related_poi: id});
+      // Click sulla mappa: selezione visiva già in onClick della direttiva
+      // related — come geobox-map, qui solo URL/store.
+      this._urlHandlerSvc.updateURL({ec_related_poi: feature.properties.id});
     }
   }
 
   unselectPoi(): void {
-    if (this.WmMapTrackRelatedPoisDirective != null) {
-      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
-    }
-    this._unselectGenericPoiMarker();
-    this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
+    this.deselectAllPois();
   }
 
   setPoi(poi: WmFeature<Point>): void {
@@ -427,14 +452,8 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this._urlHandlerSvc.updateURL({poi: id ? +id : undefined});
   }
 
-  // `setPoi` di WmMapPoisDirective è pubblico e con `null` risolve
-  // internamente in `_selectIcon(undefined)` → clearLayer del layer di
-  // selezione (`null > -1` è true in JS, quindi supera il guard e la
-  // find per id non trova nulla): è l'unico modo esposto dalla direttiva
-  // per svuotare il suo layer di selezione dall'esterno. La firma
-  // dichiara `number | 'reset'`, da cui il cast.
-  private _unselectGenericPoiMarker(): void {
-    this.wmMapPoisDirective?.setPoi(null as unknown as number);
+  private _clearGenericPoiMarker(): void {
+    (this.wmMapPoisDirective as any)?._selectIcon?.(null);
   }
 
   setLoader(event: string): void {
@@ -455,6 +474,7 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   updateEcTrack(trackId: number | undefined = undefined): void {
+    this.deselectAllPois();
     this._urlHandlerSvc.updateURL({track: trackId});
     if (trackId != null) {
       this.trackSelected.emit({trackId});

@@ -26,6 +26,16 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*.svg",
+                "input": "node_modules/ionicons/dist/ionicons/svg",
+                "output": "./svg"
+              },
+              {
+                "glob": "**/*",
+                "input": "src/app/shared/map-core/src/assets",
+                "output": "map-core/assets"
               }
             ],
             "styles": ["src/styles.scss"],
@@ -130,6 +140,16 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*.svg",
+                "input": "node_modules/ionicons/dist/ionicons/svg",
+                "output": "./svg"
+              },
+              {
+                "glob": "**/*",
+                "input": "src/app/shared/map-core/src/assets",
+                "output": "map-core/assets"
               }
             ],
             "styles": ["src/styles.scss"],
@@ -138,5 +158,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": "b821c957-fed1-4bfa-a92e-3d25c5e7b01d"
   }
 }
