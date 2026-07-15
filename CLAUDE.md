@@ -77,9 +77,17 @@ Il repo ospita più widget nel tempo — ognuno con build, output e distribuzion
 
 | Feature | Ticket | Moduli toccati | Note |
 |---|---|---|---|
-| _(da compilare a fine implementazione, vedi oc:8252)_ | | | |
+| Direttiva related POI riscritta (fuori da map-core) | — | `src/app/wm-layer-map/directives/track-related-pois.directive.ts`, `src/app/wm-layer-map/directives/ol.ts` | Sostituisce la legacy `WmMapTrackRelatedPoisDirective` di map-core nel widget: selettore `wmelMapTrackRelatedPois`, firma identica, selezione single-writer |
 
 ## Decisioni architetturali
+
+### Riscrittura direttiva track related POI (riscrittura-direttiva-track-related-pois)
+
+- **Il widget non usa più `WmMapTrackRelatedPoisDirective` di map-core**: la direttiva è riscritta in `src/app/wm-layer-map/directives/track-related-pois.directive.ts` (selettore `wmelMapTrackRelatedPois` — mai riusare quello legacy: `WmCoreModule` esporta `WmMapModule`, stesso selettore = doppia istanza sullo stesso host). Contratto completo in `docs/features/riscrittura-direttiva-track-related-pois/overview.md`.
+- **Selezione single-writer**: l'unico canale che pilota la selezione visiva è il binding `[related-current-ec-poi-id]` dallo store; click e `poiNext()`/`poiPrev()` emettono soltanto (`related-poi`) e la selezione torna dal round-trip URL/store. Non reintrodurre mai scritture imperative `setPoi = ...` via ViewChild: erano la causa del bug storico di riapparizione del POI dopo deselezione.
+- **Click via dispatcher centrale di map-core** (`registerDirective` + `wmMapEmptyClickEVT$`), non `map.on('click')`: il dispatcher instrada al layer con z-index più alto al pixel — i layer related usano `CLUSTER_ZINDEX + 1/+2` per vincere sui POI globali. Attenzione: `wmMapEmptyClickEVT$` è un `ReplaySubject(1)`, serve la guardia "solo se c'è selezione attiva" per non deselezionare all'init.
+- **`directives/ol.ts`**: funzioni pure di rendering marker (foto→icona→PNG), stessa convenzione di `map-core/src/utils/ol.ts` — nome scelto perché l'intento futuro è portare direttiva e funzioni upstream in map-core.
+- **Diff locale non committato a `map-core/src/utils/ol.ts`** (fix ArrayBuffer `_loadVectorTileBuffer`): estraneo alla feature, da NON scartare; follow-up = PR upstream separata (vedi notes.md della feature).
 
 ### wm-layer-map Angular (oc:8252)
 
