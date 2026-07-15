@@ -47,7 +47,7 @@ import {loadIcons} from '@wm-core/store/icons/icons.actions';
 import {icons} from '@wm-core/store/icons/icons.selector';
 import {BehaviorSubject, combineLatest, forkJoin, Observable, of} from 'rxjs';
 import {filter, map, switchMap, take} from 'rxjs/operators';
-import {IDATALAYER} from '@map-core/types/layer';
+import {IDATALAYER, ILAYER} from '@map-core/types/layer';
 import {
   chartHoverElements,
   ecLayer,
@@ -341,11 +341,22 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
         this._store.select(confMAPLAYERS).pipe(
           filter(layers => layers != null),
           take(1),
-        ).subscribe(layers => {
-          const layerExists = layers.some(l => +l.id === +this.layerId);
-          if (!layerExists) {
+        ).subscribe((layers: ILAYER[]) => {
+          const layer = layers.find(l => +l.id === +this.layerId);
+          if (layer == null) {
             this.error.emit({message: `layer ${this.layerId} not found`});
             return;
+          }
+          if (layer.bbox != null) {
+            combineLatest([this.confMap$, this.mapPadding$])
+              .pipe(take(1))
+              .subscribe(([conf, currentPadding]) => {
+                this._wmLayerMapDirective.apply(
+                  layer.bbox,
+                  conf.maxZoom,
+                  currentPadding ?? initPadding,
+                );
+              });
           }
           this._urlHandlerSvc.updateURL({layer: this.layerId});
           this.ready.emit();
