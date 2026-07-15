@@ -1,24 +1,107 @@
 <div class="webmapp-pageroute-map-container">
+  <div class="top-bar" part="top-bar">
+    <a
+      *ngIf="!hideCta"
+      class="cta-app-link"
+      part="app-link"
+      [href]="ctaUrl"
+      target="_blank"
+      rel="noopener"
+    >
+      <img
+        class="cta-app-link-icon"
+        part="app-link-icon"
+        [src]="ctaIconUrl ?? appIconFallbackSrc"
+        (error)="onCtaIconError($event)"
+        alt=""
+        aria-hidden="true"
+      />
+      <span class="cta-app-link-text">
+        <span class="cta-app-link-label" part="app-link-label">{{ ctaLabel$|async }}</span>
+        <span class="cta-app-link-subtitle" part="app-link-subtitle">Apri la web app</span>
+      </span>
+    </a>
+
+    <div
+      *ngIf="currentLayer$|async as currentLayer"
+      class="layer-badge"
+      part="layer-badge"
+      aria-hidden="true"
+    >
+      <img
+        *ngIf="currentLayer.icon"
+        class="layer-badge-icon"
+        part="layer-badge-icon"
+        [src]="currentLayer.icon"
+        alt=""
+      />
+      <span class="layer-badge-label">{{ currentLayer.title|wmtrans }}</span>
+    </div>
+  </div>
+
+  <button
+    class="fullscreen-toggle"
+    part="fullscreen-toggle"
+    (click)="toggleFullscreen()"
+    [attr.aria-label]="isFullscreen ? 'Esci da schermo intero' : 'Schermo intero'"
+  >
+    <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4 9V4h5v2H6v3H4zm0 6h2v3h3v2H4v-5zm16-6h-2V6h-3V4h5v5zm0 6v5h-5v-2h3v-3h2z"
+      />
+    </svg>
+    <svg *ngIf="isFullscreen" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+      />
+    </svg>
+  </button>
+
+  <div class="store-badges" part="store-links" *ngIf="!hideCta">
+    <a
+      *ngIf="iosStoreUrl$|async as iosStoreUrl"
+      class="store-badge"
+      part="store-badge"
+      [href]="iosStoreUrl"
+      target="_blank"
+      rel="noopener"
+      aria-label="Scarica su App Store"
+    >
+      <img class="store-badge-img" [src]="appStoreBadgeSrc" alt="" aria-hidden="true" />
+    </a>
+
+    <a
+      *ngIf="androidStoreUrl$|async as androidStoreUrl"
+      class="store-badge"
+      part="store-badge"
+      [href]="androidStoreUrl"
+      target="_blank"
+      rel="noopener"
+      aria-label="Scarica su Google Play"
+    >
+      <img class="store-badge-img" [src]="googlePlayBadgeSrc" alt="" aria-hidden="true" />
+    </a>
+  </div>
+
   <div class="panel" part="panel" *ngIf="ecTrack$|async as ecTrack">
     <wm-track-properties (dismiss)="updateEcTrack()"></wm-track-properties>
   </div>
 
-  <div class="panel" part="panel" *ngIf="currentPoi$|async as currentPoi">
-    <button class="panel-close" part="panel-close" (click)="unselectPoi()">✕</button>
-    <p class="panel-title" part="panel-title">{{ currentPoi.properties?.name|wmtrans }}</p>
-    <wm-tab-image-gallery
-      *ngIf="currentPoi.properties?.image_gallery?.length"
-      [imageGallery]="currentPoi.properties?.image_gallery"
-    ></wm-tab-image-gallery>
-    <wm-inner-component-html
-      *ngIf="currentPoi.properties?.description as description"
-      [html]="description|wmtrans"
-      [enableDismiss]="false"
-    ></wm-inner-component-html>
-  </div>
+  <wm-layer-map-poi-panel
+    part="panel"
+    *ngIf="currentPoi$|async as currentPoi"
+    [poi]="currentPoi"
+    [showRelatedNav]="showRelatedPoiNav$|async"
+    (dismiss)="unselectPoi()"
+    (prev)="poiPrev()"
+    (next)="poiNext()"
+  ></wm-layer-map-poi-panel>
 
   <wm-map
     #wmap
+    wmLayerMap
     [wmMapConf]="confMap$|async"
     [wmMapPadding]="mapPadding$|async"
     [wmMapFilters]="apiElasticState$|async"
@@ -32,23 +115,21 @@
     [wmMapLayerEnableFeaturesInViewport]="confOPTIONSShowFeaturesInViewport$|async"
     [wmMapLayerShowFeaturesInViewport]="showFeaturesInViewport$|async"
     [wmMapLayerZoomFeaturesInViewport]="zoomFeaturesInViewport$|async"
-    (colorSelectedFromLayerEVT)="trackColor$.next($event)"
     (featuresInViewportEVT)="featuresInViewport($event)"
     wmMapPois
     [wmMapPoisPoi]="currentEcPoiId$|async"
-    [wmMapPoisPois]="layerPois$|async"
+    [wmMapPoisPois]="pois$|async"
     [WmMapPoisUnselectPoi]="resetSelectedPoi$|async"
     (currentPoiEvt)="setPoi($event)"
     wmMapTrack
     [track]="track$|async"
     [trackElevationChartElements]="trackElevationChartHoverElements$|async"
+    [wmMapTrackColor]="trackColor$|async"
     (trackSelectedFromLayerEVT)="updateEcTrack($event)"
-    wmMapTrackRelatedPois
+    wmelMapTrackRelatedPois
     [wmTrackRelatedPoiIcons]="icons$|async"
     [related-current-ec-poi-id]="currentRelatedPoiID$|async"
     (related-poi)="setCurrentRelatedPoi($event)"
-    (related-poi-next)="currentPoiNextID$.next(+$event)"
-    (related-poi-prev)="currentPoiPrevID$.next(+$event)"
   >
     <div class="bottom-right" bottom-right>
       <ng-content select="[bottom-right]"></ng-content>
