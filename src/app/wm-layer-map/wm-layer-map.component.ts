@@ -57,7 +57,7 @@ import {
 } from '@wm-core/store/user-activity/user-activity.selector';
 import {WmFeature} from '@wm-types/feature';
 import {Point, LineString} from 'geojson';
-import {WmMapPoisDirective, WmMapTrackRelatedPoisDirective} from '@map-core/directives';
+import {WmMapPoisDirective} from '@map-core/directives';
 import {UrlHandlerService} from '@wm-core/services/url-handler.service';
 import {Actions, ofType} from '@ngrx/effects';
 import {WmSlopeChartHoverElements} from '@wm-types/slope-chart';
@@ -67,6 +67,7 @@ import {confAPP} from '@wm-core/store/conf/conf.selector';
 import {ILAYER} from '@wm-core/types/config';
 import {WidgetBrandingService, WidgetPlatform} from '../services/widget-branding.service';
 import {WmLayerMapDirective} from './directives/wm-layer-map.directive';
+import {WmelMapTrackRelatedPoisDirective} from './directives/track-related-pois.directive';
 import {ensureGalleryModalGlobalStyles} from './gallery-modal-global-styles';
 import {ensureIoniconsSetup} from './ionicons-setup';
 import {WmLayerMapPoiPanelComponent} from './wm-layer-map-poi-panel.component';
@@ -91,7 +92,7 @@ const maxWidth = 600;
 @Component({
   selector: 'app-wm-layer-map-root',
   standalone: true,
-  imports: [CommonModule, WmCoreModule, IonicModule, WmLayerMapDirective, WmLayerMapPoiPanelComponent],
+  imports: [CommonModule, WmCoreModule, IonicModule, WmLayerMapDirective, WmLayerMapPoiPanelComponent, WmelMapTrackRelatedPoisDirective],
   templateUrl: './wm-layer-map.component.html',
   styleUrl: './wm-layer-map.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -113,8 +114,8 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() error = new EventEmitter<{message: string}>();
   @Output('track-selected') trackSelected = new EventEmitter<{trackId: number}>();
 
-  @ViewChild(WmMapTrackRelatedPoisDirective)
-  WmMapTrackRelatedPoisDirective: WmMapTrackRelatedPoisDirective;
+  @ViewChild(WmelMapTrackRelatedPoisDirective)
+  relatedPoisDirective: WmelMapTrackRelatedPoisDirective;
 
   @ViewChild(WmMapPoisDirective)
   wmMapPoisDirective: WmMapPoisDirective;
@@ -138,8 +139,6 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   currentEcPoiId$ = this._store.select(currentEcPoiId);
   currentLayer$ = this._store.select(ecLayer);
   ecTrack$ = this._store.select(currentEcTrack);
-  currentPoiNextID$: BehaviorSubject<number> = new BehaviorSubject<number>(-1);
-  currentPoiPrevID$: BehaviorSubject<number> = new BehaviorSubject<number>(-1);
   currentRelatedPoi$ = this._store.select(currentEcRelatedPoi);
   currentRelatedPoiID$ = this._store.select(currentEcRelatedPoiId);
   dataLayerUrls$: Observable<IDATALAYER>;
@@ -148,7 +147,7 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   // Selector originale di wm-core (identico a geobox-map.component.ts):
   // tutti i POI dell'app, popolati da `loadEcPois()` (ngOnInit) via
   // `EcService.getPois()` (file pois.geojson statico per-app, nessuna
-  // query Elasticsearch/ecTracks). `wmMapTrackRelatedPois` (sotto)
+  // query Elasticsearch/ecTracks). `wmelMapTrackRelatedPois` (sotto)
   // renderizza separatamente i POI della sola traccia selezionata, dalla
   // sua stessa proprietà `related_pois` — le due directory coprono due
   // dataset complementari, non sovrapposti, come nella webapp.
@@ -400,13 +399,6 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
               this._clearGenericPoiMarker();
             }
           });
-        this.currentRelatedPoiID$
-          .pipe(distinctUntilChanged(), takeUntil(this._destroy$))
-          .subscribe(id => {
-            if (id == null && this.WmMapTrackRelatedPoisDirective != null) {
-              this.WmMapTrackRelatedPoisDirective.setPoi = -1;
-            }
-          });
       });
   }
 
@@ -431,29 +423,23 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this._store.dispatch(wmMapFeaturesInViewport({featureIds}));
   }
 
-  // Bug related-poi isolato a wmMapTrackRelatedPois (verificato: senza
-  // wmMapPois il comportamento errato resta). Coordinazione URL/store nel widget.
-  /** Deseleziona related POI e azzera lo stato URL/store. */
+  /** Deseleziona related POI e azzera lo stato URL/store. La deselezione
+   * visiva arriva alla direttiva via binding (unico scrittore). */
   deselectAllPois(): void {
     this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
-    if (this.WmMapTrackRelatedPoisDirective != null) {
-      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
-    }
     this.resetSelectedPoi$.next(!this.resetSelectedPoi$.value);
     this._clearGenericPoiMarker();
   }
 
+  /** Unico scrittore: aggiorna solo URL/store; la selezione visiva torna
+   * alla direttiva dal binding related-current-ec-poi-id. `null` arriva
+   * dalla direttiva su click a vuoto o reset traccia con selezione attiva. */
   setCurrentRelatedPoi(feature: number | WmFeature<Point> | null): void {
     if (feature == null) {
-      return;
+      this._urlHandlerSvc.updateURL({ec_related_poi: undefined});
     } else if (typeof feature === 'number') {
       this._urlHandlerSvc.updateURL({ec_related_poi: feature});
-      if (this.WmMapTrackRelatedPoisDirective != null) {
-        this.WmMapTrackRelatedPoisDirective.setPoi = feature;
-      }
     } else if (feature.properties != null && feature.properties.id != null) {
-      // Click sulla mappa: selezione visiva già in onClick della direttiva
-      // related — come geobox-map, qui solo URL/store.
       this._urlHandlerSvc.updateURL({ec_related_poi: feature.properties.id});
     }
   }
@@ -463,18 +449,17 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   poiPrev(): void {
-    this.WmMapTrackRelatedPoisDirective?.poiPrev();
+    this.relatedPoisDirective?.poiPrev();
   }
 
   poiNext(): void {
-    this.WmMapTrackRelatedPoisDirective?.poiNext();
+    this.relatedPoisDirective?.poiNext();
   }
 
+  /** La mutua esclusione poi/ec_related_poi è gestita da LocalUrlHandlerService:
+   * l'azzeramento di ec_related_poi arriva alla direttiva via binding. */
   setPoi(poi: WmFeature<Point>): void {
     this._urlHandlerSvc.updateURL({poi: poi?.properties?.id ? +poi.properties.id : undefined});
-    if (this.WmMapTrackRelatedPoisDirective != null) {
-      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
-    }
   }
 
   private _clearGenericPoiMarker(): void {

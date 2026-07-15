@@ -126,12 +126,10 @@
     [trackElevationChartElements]="trackElevationChartHoverElements$|async"
     [wmMapTrackColor]="trackColor$|async"
     (trackSelectedFromLayerEVT)="updateEcTrack($event)"
-    wmMapTrackRelatedPois
+    wmelMapTrackRelatedPois
     [wmTrackRelatedPoiIcons]="icons$|async"
     [related-current-ec-poi-id]="currentRelatedPoiID$|async"
     (related-poi)="setCurrentRelatedPoi($event)"
-    (related-poi-next)="currentPoiNextID$.next(+$event)"
-    (related-poi-prev)="currentPoiPrevID$.next(+$event)"
   >
     <div class="bottom-right" bottom-right>
       <ng-content select="[bottom-right]"></ng-content>
