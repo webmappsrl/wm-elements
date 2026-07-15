@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnDestroy,
@@ -20,6 +22,7 @@ import {
   confOPTIONSShowFeaturesInViewport,
   confZoomFeaturesInViewport,
   confGeohubId,
+  confTHEMEVariables,
   isConfLoaded,
 } from '@wm-core/store/conf/conf.selector';
 import {
@@ -58,6 +61,10 @@ import {UrlHandlerService} from '@wm-core/services/url-handler.service';
 import {Actions, ofType} from '@ngrx/effects';
 import {WmSlopeChartHoverElements} from '@wm-types/slope-chart';
 import {EnvironmentService} from '@wm-core/services/environment.service';
+import {LangService} from '@wm-core/localization/lang.service';
+import {confAPP} from '@wm-core/store/conf/conf.selector';
+import {WidgetBrandingService, WidgetPlatform} from '../services/widget-branding.service';
+import {WmLayerMapDirective} from './directives/wm-layer-map.directive';
 import {FeatureLike} from 'ol/Feature';
 import {ZoomFeaturesInViewport} from '@wm-types/config';
 import {WmCoreModule} from '@wm-core/wm-core.module';
@@ -79,7 +86,7 @@ const maxWidth = 600;
 @Component({
   selector: 'app-wm-layer-map-root',
   standalone: true,
-  imports: [CommonModule, WmCoreModule, IonicModule],
+  imports: [CommonModule, WmCoreModule, IonicModule, WmLayerMapDirective],
   templateUrl: './wm-layer-map.component.html',
   styleUrl: './wm-layer-map.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -89,6 +96,13 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
   @Input() shard!: string;
   @Input('app-id') appId!: string;
   @Input('layer-id') layerId!: string;
+  @Input('cta-label') ctaLabelAttr?: string;
+  @Input('cta-url') ctaUrlAttr?: string;
+  @Input('app-icon-url') appIconUrlAttr?: string;
+  @Input('ios-store-url') iosStoreUrlAttr?: string;
+  @Input('android-store-url') androidStoreUrlAttr?: string;
+  @Input('hide-cta') hideCtaAttr?: string;
+  @Input() lang?: string;
 
   @Output() ready = new EventEmitter<void>();
   @Output() error = new EventEmitter<{message: string}>();
@@ -96,6 +110,8 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
 
   @ViewChild(WmMapTrackRelatedPoisDirective)
   WmMapTrackRelatedPoisDirective: WmMapTrackRelatedPoisDirective;
+
+  @ViewChild(WmLayerMapDirective) private _wmLayerMapDirective: WmLayerMapDirective;
 
   apiElasticState$: Observable<any> = this._store.select(mapFilters);
   confJIDOUPDATETIME$: Observable<any> = this._store.select(confJIDOUPDATETIME);
@@ -177,13 +193,63 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
     confZoomFeaturesInViewport,
   );
 
+  confAPP$ = this._store.select(confAPP);
+  platform: WidgetPlatform;
+  appIconFallbackSrc = this._brandingSvc.APP_ICON_FALLBACK_SRC;
+  appStoreBadgeSrc = this._brandingSvc.APP_STORE_BADGE_SRC;
+  googlePlayBadgeSrc = this._brandingSvc.GOOGLE_PLAY_BADGE_SRC;
+
+  ctaLabel$: Observable<string> = this.confAPP$.pipe(
+    map(app => this.ctaLabelAttr ?? app?.name ?? 'Webmapp'),
+  );
+
+  // Calcolate in ngOnInit (non come inizializzatori di campo): appId/layerId
+  // sono @Input() e Angular li valorizza solo dopo la costruzione
+  // dell'istanza, durante il primo ciclo di change detection — usarli qui
+  // in un inizializzatore di campo li leggerebbe ancora `undefined`.
+  ctaUrl: string;
+  ctaIconUrl: string | null;
+
+  iosStoreUrl$: Observable<string | null> = this.confAPP$.pipe(
+    map(app => {
+      if (this.platform != null && this.platform !== 'ios') {
+        return null;
+      }
+      return this.iosStoreUrlAttr ?? app?.iosStore ?? null;
+    }),
+  );
+
+  androidStoreUrl$: Observable<string | null> = this.confAPP$.pipe(
+    map(app => {
+      if (this.platform != null && this.platform !== 'android') {
+        return null;
+      }
+      return this.androidStoreUrlAttr ?? app?.androidStore ?? null;
+    }),
+  );
+
+  get hideCta(): boolean {
+    return this.hideCtaAttr != null && this.hideCtaAttr !== 'false';
+  }
+
+  isFullscreen = false;
+  private _onFullscreenChange = (): void => {
+    this.isFullscreen = document.fullscreenElement === this._elementRef.nativeElement;
+    this._cdr.markForCheck();
+  };
+
   constructor(
     private _store: Store,
     private _actions$: Actions,
     private _urlHandlerSvc: UrlHandlerService,
     private _environmentSvc: EnvironmentService,
     private _ecSvc: EcService,
+    private _brandingSvc: WidgetBrandingService,
+    private _langSvc: LangService,
+    private _elementRef: ElementRef<HTMLElement>,
+    private _cdr: ChangeDetectorRef,
   ) {
+    this.platform = this._brandingSvc.detectPlatform();
     this.refreshLayer$ = this._actions$.pipe(
       ofType(updateTrackFilter, toggleTrackFilter, resetTrackFilters),
     );
@@ -203,6 +269,53 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.ctaUrl = this.ctaUrlAttr ?? this._brandingSvc.buildCtaUrl(this.appId, this.layerId);
+    this.ctaIconUrl = this.appIconUrlAttr ?? this._brandingSvc.buildAppIconUrl(this.appId);
+
+    // Fullscreen custom: a differenza del controllo OL nativo (che mette in
+    // fullscreen solo il contenitore interno della mappa, `map.getTargetElement()`,
+    // escludendo CTA/badge/pannello), qui si mette in fullscreen l'intero
+    // host element del widget — stesso comportamento del vecchio widget
+    // vanilla JS, dove tutta la UI resta visibile durante il fullscreen.
+    document.addEventListener('fullscreenchange', this._onFullscreenChange);
+
+    // wm-webapp applica le CSS custom properties del tema (--wm-color-*,
+    // --wm-font-*, usate da componenti riusati di wm-core/map-core come
+    // l'attribution della mappa) sul `:root` globale della pagina
+    // (app.component.ts, codice applicativo di wm-webapp, non del
+    // submodule wm-core). Il widget non ha un equivalente e viene
+    // embeddato in Shadow DOM su pagine di terzi: applicarle su
+    // `document.documentElement` inquinerebbe lo stato globale della
+    // pagina host, quindi le applichiamo sull'host element del widget
+    // stesso — le CSS custom properties attraversano il confine dello
+    // Shadow DOM per ereditarietà, restando invisibili fuori dal widget.
+    this._store
+      .select(confTHEMEVariables)
+      .pipe(
+        filter(vars => vars != null),
+        take(1),
+      )
+      .subscribe(vars => {
+        Object.keys(vars).forEach(name => {
+          this._elementRef.nativeElement.style.setProperty(name, `${vars[name]}`);
+        });
+      });
+
+    const resolvedLang = this.lang ?? document.documentElement.lang ?? 'it';
+    // LangService.use() scrive anche su localStorage('wm-lang'), condiviso
+    // da tutte le istanze del widget sulla stessa pagina: se due
+    // <wm-layer-map> con `lang` diversi sono embeddati sulla stessa pagina,
+    // l'ultimo a inizializzarsi vince per entrambi. Comportamento
+    // preesistente di wm-core (LangService), non risolvibile qui senza
+    // toccare il submodule — accettato come rischio noto, non peggiora
+    // nulla rispetto a oggi (il widget attuale non imposta affatto `lang`).
+    this._langSvc.isInit$
+      .pipe(
+        filter(ready => ready === true),
+        take(1),
+      )
+      .subscribe(() => this._langSvc.use(resolvedLang));
+
     // Same actions ConfEffects/EcEffects/IconsEffects already listen for in
     // wm-core: loadConf triggers ConfService.getConf() (uses
     // EnvironmentService.confUrl, already resolved for our shard/app-id),
@@ -240,7 +353,17 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
       });
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    document.removeEventListener('fullscreenchange', this._onFullscreenChange);
+  }
+
+  toggleFullscreen(): void {
+    if (document.fullscreenElement === this._elementRef.nativeElement) {
+      document.exitFullscreen();
+    } else {
+      this._elementRef.nativeElement.requestFullscreen();
+    }
+  }
 
   featuresInViewport(features: FeatureLike[]): void {
     const featureIds = features
@@ -291,6 +414,13 @@ export class WmLayerMapComponent implements OnInit, OnDestroy {
     this._urlHandlerSvc.updateURL({track: trackId});
     if (trackId != null) {
       this.trackSelected.emit({trackId});
+    }
+  }
+
+  onCtaIconError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (img.src !== this.appIconFallbackSrc) {
+      img.src = this.appIconFallbackSrc;
     }
   }
 }
