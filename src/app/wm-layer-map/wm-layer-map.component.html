@@ -89,14 +89,28 @@
     <wm-track-properties (dismiss)="updateEcTrack()"></wm-track-properties>
   </div>
 
-  <div class="panel" part="panel" *ngIf="currentPoi$|async as currentPoi">
-    <button
-      class="panel-close"
-      part="panel-close"
-      aria-label="Chiudi dettaglio"
-      (click)="unselectPoi()"
-    >✕</button>
-    <p class="panel-title" part="panel-title">{{ currentPoi.properties?.name|wmtrans }}</p>
+  <div
+    class="panel"
+    part="panel"
+    *ngIf="currentPoi$|async as currentPoi"
+    [class.panel-compact]="!currentPoi.properties?.image_gallery?.length && !currentPoi.properties?.description"
+  >
+    <div class="panel-header">
+      <p class="panel-title" part="panel-title">{{ currentPoi.properties?.name|wmtrans }}</p>
+      <button
+        class="panel-close"
+        part="panel-close"
+        aria-label="Chiudi dettaglio"
+        (click)="unselectPoi()"
+      >
+        <svg viewBox="0 0 512 512" width="20" height="20" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="m289.94 256 95-95A24 24 0 0 0 351 127l-95 95-95-95a24 24 0 0 0-34 34l95 95-95 95a24 24 0 1 0 34 34l95-95 95 95a24 24 0 0 0 34-34Z"
+          />
+        </svg>
+      </button>
+    </div>
     <wm-tab-image-gallery
       *ngIf="currentPoi.properties?.image_gallery?.length"
       [imageGallery]="currentPoi.properties?.image_gallery"
@@ -128,12 +142,13 @@
     (featuresInViewportEVT)="featuresInViewport($event)"
     wmMapPois
     [wmMapPoisPoi]="currentEcPoiId$|async"
-    [wmMapPoisPois]="layerPois$|async"
+    [wmMapPoisPois]="pois$|async"
     [WmMapPoisUnselectPoi]="resetSelectedPoi$|async"
     (currentPoiEvt)="setPoi($event)"
     wmMapTrack
     [track]="track$|async"
     [trackElevationChartElements]="trackElevationChartHoverElements$|async"
+    [wmMapTrackColor]="trackColor$|async"
     (trackSelectedFromLayerEVT)="updateEcTrack($event)"
     wmMapTrackRelatedPois
     [wmTrackRelatedPoiIcons]="icons$|async"

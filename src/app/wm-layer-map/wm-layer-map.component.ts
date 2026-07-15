@@ -16,6 +16,7 @@ import {padding as actionPadding} from '@map-core/store/map-core.actions';
 import {padding} from '@map-core/store/map-core.selector';
 import {Store} from '@ngrx/store';
 import {loadConf} from '@wm-core/store/conf/conf.actions';
+import {loadEcPois} from '@wm-core/store/features/ec/ec.actions';
 import {
   confJIDOUPDATETIME,
   confMAP,
@@ -31,9 +32,8 @@ import {
   currentEcRelatedPoi,
   currentEcRelatedPoiId,
   currentEcTrack,
-  ecTracks as ecTracksSelector,
+  ecPois,
 } from '@wm-core/store/features/ec/ec.selector';
-import {EcService} from '@wm-core/store/features/ec/ec.service';
 import {poi, showFeaturesInViewport, track} from '@wm-core/store/features/features.selector';
 import {
   resetTrackFilters,
@@ -46,8 +46,8 @@ import {
 import {ICONS} from '@wm-types/config';
 import {loadIcons} from '@wm-core/store/icons/icons.actions';
 import {icons} from '@wm-core/store/icons/icons.selector';
-import {BehaviorSubject, combineLatest, forkJoin, Observable, of, ReplaySubject} from 'rxjs';
-import {filter, map, switchMap, take} from 'rxjs/operators';
+import {BehaviorSubject, combineLatest, Observable, ReplaySubject} from 'rxjs';
+import {filter, map, take} from 'rxjs/operators';
 import {IDATALAYER} from '@map-core/types/layer';
 import {
   chartHoverElements,
@@ -57,7 +57,7 @@ import {
 } from '@wm-core/store/user-activity/user-activity.selector';
 import {WmFeature} from '@wm-types/feature';
 import {Point} from 'geojson';
-import {WmMapTrackRelatedPoisDirective} from '@map-core/directives';
+import {WmMapPoisDirective, WmMapTrackRelatedPoisDirective} from '@map-core/directives';
 import {UrlHandlerService} from '@wm-core/services/url-handler.service';
 import {Actions, ofType} from '@ngrx/effects';
 import {WmSlopeChartHoverElements} from '@wm-types/slope-chart';
@@ -113,6 +113,9 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(WmMapTrackRelatedPoisDirective)
   WmMapTrackRelatedPoisDirective: WmMapTrackRelatedPoisDirective;
 
+  @ViewChild(WmMapPoisDirective)
+  wmMapPoisDirective: WmMapPoisDirective;
+
   @ViewChild(WmLayerMapDirective) private _wmLayerMapDirective: WmLayerMapDirective;
 
   // Se lo store NgRx ha già `isConfLoaded === true` al momento della
@@ -131,7 +134,6 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   );
   currentEcPoiId$ = this._store.select(currentEcPoiId);
   currentLayer$ = this._store.select(ecLayer);
-  currentPoi$ = this._store.select(poi);
   ecTrack$ = this._store.select(currentEcTrack);
   currentPoiNextID$: BehaviorSubject<number> = new BehaviorSubject<number>(-1);
   currentPoiPrevID$: BehaviorSubject<number> = new BehaviorSubject<number>(-1);
@@ -140,56 +142,21 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   dataLayerUrls$: Observable<IDATALAYER>;
   geohubId$ = this._store.select(confGeohubId);
   icons$: Observable<ICONS> = this._store.select(icons);
-  // POIs of the whole layer (all its tappe/tracks, not just the one the user
-  // clicked): `ecTracks` is populated automatically by wm-core's own
-  // `triggerQueryOnInput$` effect (user-activity.effects.ts) as soon as the
-  // layer is set — the same ES `&layer=<id>` query wm-webapp uses to list a
-  // cammino's tappe. Each hit's own `related_pois` (embedded server-side,
-  // fetched via the existing `EcService.getEcTrack`, same method used
-  // elsewhere for the clicked track) are combined here — no invented fetch
-  // logic, no global ecPois/taxonomy filter (see notes.md).
-  layerPois$: Observable<WmFeature<Point>[]> = combineLatest([
-    (this._store.select(ecTracksSelector) as Observable<any[]>).pipe(
-      switchMap((hits: any[]) => {
-        if (hits == null || hits.length === 0) {
-          return of([] as WmFeature<Point>[]);
-        }
-        return forkJoin(hits.map(hit => this._ecSvc.getEcTrack(hit.id))).pipe(
-          map((tracks: WmFeature<any>[]) => {
-            const allPois = tracks.flatMap(
-              t => (t?.properties?.related_pois as WmFeature<Point>[]) ?? [],
-            );
-            // Adjacent tappe of the same cammino can share a junction POI —
-            // present in both tracks' own related_pois. Deduplicated by id,
-            // otherwise map-core's pois.directive throws ("feature already
-            // added to source") trying to add the same POI twice to the same
-            // OL vector source, aborting the whole map render.
-            const seen = new Set<number>();
-            return allPois.filter(f => {
-              const id = f?.properties?.id;
-              if (id == null || seen.has(id)) return false;
-              seen.add(id);
-              return true;
-            });
-          }),
-        );
-      }),
-    ),
-    this.icons$,
-  ]).pipe(
-    // Same svgIcon enrichment `ecPois` (ec.selector.ts) applies to the global
-    // POI feed — reused here since related_pois arrive raw, without it.
-    map(([pois, icons]) =>
-      pois.map((f: any) => {
-        if (f?.properties?.taxonomy?.poi_type != null) {
-          const iconName = f.properties.taxonomy.poi_type.icon_name ?? '';
-          const svgIcon = icons?.[iconName] ?? f.properties.taxonomy.poi_type.icon ?? '';
-          return {...f, properties: {...f.properties, svgIcon}};
-        }
-        return f;
-      }),
-    ),
-  );
+  // Selector originale di wm-core (identico a geobox-map.component.ts):
+  // tutti i POI dell'app, popolati da `loadEcPois()` (ngOnInit) via
+  // `EcService.getPois()` (file pois.geojson statico per-app, nessuna
+  // query Elasticsearch/ecTracks). `wmMapTrackRelatedPois` (sotto)
+  // renderizza separatamente i POI della sola traccia selezionata, dalla
+  // sua stessa proprietà `related_pois` — le due directory coprono due
+  // dataset complementari, non sovrapposti, come nella webapp.
+  pois$: Observable<WmFeature<Point>[]> = this._store.select(ecPois);
+  // Selector originale di wm-core (identico a geobox-map.component.ts):
+  // `ecPoi ?? ecRelatedPoi`, dove `ecPoi` deriva da `state.ecPoiFeatures`
+  // (popolato da `loadEcPois()` in ngOnInit, non dal campo morto
+  // `state.ecPois`) ed `ecRelatedPoi` dalla traccia selezionata. Prima di
+  // dispatchare `loadEcPois()` questo selector risultava sempre vuoto —
+  // corretto lì, non qui: nessuna logica custom di lookup necessaria.
+  currentPoi$ = this._store.select(poi);
   loading$: Observable<boolean> = this._store.select(loading);
   mapPadding$ = this._store.select(padding);
   refreshLayer$: Observable<any>;
@@ -253,7 +220,6 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     private _actions$: Actions,
     private _urlHandlerSvc: UrlHandlerService,
     private _environmentSvc: EnvironmentService,
-    private _ecSvc: EcService,
     private _brandingSvc: WidgetBrandingService,
     private _langSvc: LangService,
     private _elementRef: ElementRef<HTMLElement>,
@@ -281,6 +247,25 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     this.ctaUrl = this.ctaUrlAttr ?? this._brandingSvc.buildCtaUrl(this.appId, this.layerId);
     this.ctaIconUrl = this.appIconUrlAttr ?? this._brandingSvc.buildAppIconUrl(this.appId);
+
+    // map-core's createIconFeatureFromHtml (usata da wmMapTrack per le
+    // icone di inizio/fine traccia) cerca un `<canvas id="canvas">` con
+    // `document.getElementById` — in wm-webapp esiste perché renderizzato
+    // nel template dello stesso wm-map component, ma lì l'app non usa
+    // Shadow DOM reale. Qui `<wm-map>` (e quindi il suo canvas) vive
+    // dentro il nostro Shadow DOM, invisibile a `document.getElementById`
+    // (non attraversa il confine dello shadow root) — senza questo
+    // elemento la lookup restituisce null e `.getContext('2d')` lancia,
+    // interrompendo l'inizializzazione della traccia PRIMA che arrivi
+    // allo zoom-to-track. Non risolvibile nel submodule: si crea un
+    // canvas di scratch nel document globale (mai letto, serve solo a
+    // non far crashare la lookup), condiviso e idempotente tra istanze.
+    if (document.getElementById('canvas') == null) {
+      const scratchCanvas = document.createElement('canvas');
+      scratchCanvas.id = 'canvas';
+      scratchCanvas.style.display = 'none';
+      document.body.appendChild(scratchCanvas);
+    }
 
     // Fullscreen custom: a differenza del controllo OL nativo (che mette in
     // fullscreen solo il contenitore interno della mappa, `map.getTargetElement()`,
@@ -343,6 +328,12 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     // docs/features/8252-wm-layer-map-angular/notes.md).
     this._store.dispatch(loadConf());
     this._store.dispatch(loadIcons());
+    // Popola state.ecPoiFeatures (EcService.getPois(), file pois.geojson
+    // statico per-app via awsPoisUrl — nessuna query Elasticsearch) da cui
+    // dipende il selector `poi`/`currentEcPoi` di wm-core: senza questo
+    // dispatch quel selector risultava sempre vuoto e il pannello
+    // dettaglio POI non si apriva mai (vedi notes.md).
+    this._store.dispatch(loadEcPois());
 
     this._store
       .select(isConfLoaded)
@@ -397,25 +388,53 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this._store.dispatch(wmMapFeaturesInViewport({featureIds}));
   }
 
+  // Coordinazione incrociata fra i DUE layer di selezione indipendenti:
+  // wmMapPois (POI generali) e wmMapTrackRelatedPois (related-poi della
+  // traccia) hanno ciascuno un proprio `_selectedPoiLayer` privato e
+  // nessuno dei due pulisce quello dell'altro — senza queste chiamate
+  // esplicite restavano evidenziati due marker contemporaneamente (uno
+  // per layer). Si usano solo API pubbliche delle direttive, nessuna
+  // modifica al submodule: `setPoi = -1` (related, stesso meccanismo di
+  // geobox-map.unselectPOI() nella webapp) e `setPoi(null)` (pois, che
+  // internamente risolve in `_selectIcon(undefined)` → clearLayer).
   setCurrentRelatedPoi(feature: number | WmFeature<Point> | null): void {
     if (feature == null) {
       return;
     } else if (typeof feature === 'number') {
+      this._unselectGenericPoiMarker();
       this._urlHandlerSvc.updateURL({ec_related_poi: feature});
       this.WmMapTrackRelatedPoisDirective.setPoi = feature;
     } else if (feature.properties != null && feature.properties.id != null) {
       const id = feature.properties.id;
+      this._unselectGenericPoiMarker();
       this._urlHandlerSvc.updateURL({ec_related_poi: id});
     }
   }
 
   unselectPoi(): void {
+    if (this.WmMapTrackRelatedPoisDirective != null) {
+      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
+    }
+    this._unselectGenericPoiMarker();
     this._urlHandlerSvc.updateURL({poi: undefined, ec_related_poi: undefined});
   }
 
   setPoi(poi: WmFeature<Point>): void {
+    if (this.WmMapTrackRelatedPoisDirective != null) {
+      this.WmMapTrackRelatedPoisDirective.setPoi = -1;
+    }
     const id = poi?.properties?.id ?? null;
     this._urlHandlerSvc.updateURL({poi: id ? +id : undefined});
+  }
+
+  // `setPoi` di WmMapPoisDirective è pubblico e con `null` risolve
+  // internamente in `_selectIcon(undefined)` → clearLayer del layer di
+  // selezione (`null > -1` è true in JS, quindi supera il guard e la
+  // find per id non trova nulla): è l'unico modo esposto dalla direttiva
+  // per svuotare il suo layer di selezione dall'esterno. La firma
+  // dichiara `number | 'reset'`, da cui il cast.
+  private _unselectGenericPoiMarker(): void {
+    this.wmMapPoisDirective?.setPoi(null as unknown as number);
   }
 
   setLoader(event: string): void {
