@@ -59,9 +59,38 @@ fi
 # Only replace this widget's own subfolder — other widgets already published
 # on the `dist` branch (in their own dist/<other-widget>/ subfolder) must
 # survive untouched.
+#
+# Grace period: the previous generation of hashed bundles (the ones listed in
+# the outgoing entries.json) is preserved alongside the new ones, so any
+# client that fetched the old manifest moments before this publish (or any
+# stale manifest cache, ≤5 min on raw.githubusercontent.com) keeps resolving
+# files that still exist. Older generations beyond the previous one are
+# dropped. This closes the outage window seen on 2026-07-15, when replacing
+# the folder wholesale left a stale bundle listing pointing at deleted files.
+PREV_KEEP_DIR="$(mktemp -d)"
+PREV_MANIFEST="${WORKTREE_DIR}/${WIDGET}/entries.json"
+if [[ -f "$PREV_MANIFEST" ]]; then
+  while IFS= read -r prev_file; do
+    if [[ -n "$prev_file" && -f "${WORKTREE_DIR}/${WIDGET}/${prev_file}" ]]; then
+      cp "${WORKTREE_DIR}/${WIDGET}/${prev_file}" "$PREV_KEEP_DIR/"
+    fi
+  done < <(python3 -c "
+import json, sys
+try:
+    print('\n'.join(json.load(open('$PREV_MANIFEST')).values()))
+except Exception:
+    pass
+")
+fi
 rm -rf "${WORKTREE_DIR:?}/${WIDGET}"
 mkdir -p "${WORKTREE_DIR}/${WIDGET}"
 cp -r "dist/${WIDGET}"/* "${WORKTREE_DIR}/${WIDGET}"/
+for prev_file in "$PREV_KEEP_DIR"/*; do
+  if [[ -f "$prev_file" && ! -f "${WORKTREE_DIR}/${WIDGET}/$(basename "$prev_file")" ]]; then
+    cp "$prev_file" "${WORKTREE_DIR}/${WIDGET}/"
+  fi
+done
+rm -rf "$PREV_KEEP_DIR"
 
 # Customer-facing URL stays .../<widget>.js (stable). This loader is regenerated
 # each publish with the current hashed Angular entry filenames — never rename
@@ -81,8 +110,28 @@ for required in RUNTIME_JS POLYFILLS_JS SCRIPTS_JS MAIN_JS STYLES_CSS; do
 done
 popd > /dev/null
 
+# Manifest with the current hashed entry filenames — the loader resolves the
+# bundles from here at runtime (raw.githubusercontent.com, ~5 min cache, with
+# cdn.jsdelivr.net sibling as fallback). NEVER resolved via the jsDelivr Data
+# API: its branch listing is cached with max-age of one year and its origin
+# resolution can stay stuck on a stale commit indefinitely (2026-07-15 outage).
+python3 - "$WORKTREE_DIR" "$WIDGET" "$RUNTIME_JS" "$POLYFILLS_JS" "$SCRIPTS_JS" "$MAIN_JS" "$STYLES_CSS" <<'PYEOF'
+import json, sys
+worktree, widget, runtime, polyfills, scripts, main, styles = sys.argv[1:8]
+manifest = {
+    "runtime": runtime,
+    "polyfills": polyfills,
+    "scripts": scripts,
+    "main": main,
+    "styles": styles,
+}
+with open(f"{worktree}/{widget}/entries.json", "w") as f:
+    json.dump(manifest, f, indent=2)
+    f.write("\n")
+PYEOF
+
 # Static loader (never changes). Hashed entry filenames are resolved at runtime
-# via the jsDelivr Data API — see scripts/widget-loader.template.js.
+# from entries.json — see scripts/widget-loader.template.js.
 cp "scripts/widget-loader.template.js" "${WORKTREE_DIR}/${WIDGET}/${WIDGET}.js"
 
 pushd "$WORKTREE_DIR" > /dev/null

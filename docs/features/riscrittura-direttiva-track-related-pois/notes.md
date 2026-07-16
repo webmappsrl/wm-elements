@@ -26,6 +26,15 @@ Divergenze consapevoli dalla legacy (documentate anche nella self-review del pia
 
 Cronologia: esisteva un workaround locale non committato nel submodule (copia dei byte in un nuovo `ArrayBuffer`), andato perso durante la sessione (discard IDE, non da comandi git di questo workflow). **Risoluzione definitiva**: TypeScript allineato a wm-webapp — `typescript@~5.8.0` in `package.json` (installato 5.8.3, identico a wm-webapp). Il submodule compila pulito senza alcuna modifica locale. Nessuna PR upstream più necessaria per questo punto (l'errore riapparirebbe solo se wm-elements aggiornasse TS a ≥5.9 prima di map-core).
 
+## Incidente publish CDN 2026-07-15 (risolto: loader su manifest entries.json)
+
+La pubblicazione post-merge ha rivelato un difetto del meccanismo di distribuzione (preesistente, non della feature): il loader `wm-layer-map.js` risolveva i nomi hashati dei bundle tramite la **Data API di jsDelivr**, che cacha il listing del branch con `max-age` di **un anno** e la cui risoluzione branch→commit all'origine resta inchiodata a un commit stantio a tempo indeterminato (verificato: >15h dopo il publish, anche le risposte fresche — `x-cache: MISS` — risolvevano ancora la generazione precedente di bundle, ormai cancellata dal branch → 404 → widget non caricato). Ripubblicare non aiuta: la cache è keyed sull'URL e non viene invalidata dai push; `purge.jsdelivr.net` copre solo `cdn.jsdelivr.net`, non la Data API.
+
+**Fix** (nessun cliente ancora impattato, embed non condiviso):
+- `publish-dist.sh` genera `entries.json` (manifest dei nomi hashati correnti) nella cartella pubblicata;
+- `widget-loader.template.js` legge il manifest da `raw.githubusercontent.com` (cache ~5 min, nessuna risoluzione jsDelivr di mezzo) con fallback sul sibling `entries.json` via `cdn.jsdelivr.net` (purgato ad ogni publish);
+- il publish conserva la **generazione precedente** di bundle accanto alla nuova (grazia per manifest stale ≤5 min); le generazioni più vecchie decadono.
+
 ## Follow-up
 
 - **Porting in map-core**: intenzione dichiarata del dev di portare in futuro la nuova direttiva (e le sue funzioni pure) upstream in map-core. Per questo il modulo marker è stato chiamato `directives/ol.ts`, stessa convenzione di `map-core/src/utils/ol.ts` — segnala che i due file sono omologhi e destinati a convergere.
