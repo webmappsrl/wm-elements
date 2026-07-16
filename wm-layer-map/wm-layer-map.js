@@ -11,14 +11,23 @@
 // config or a second attribute on the customer's <script> tag.
 //
 // This file is intentionally static: publish-dist.sh copies it as-is on every
-// deploy. Hashed Angular entry filenames are resolved at runtime via the
-// jsDelivr Data API (https://www.jsdelivr.com/docs/data.jsdelivr.com) so the
-// stable @dist <widget>.js URL never needs to change — only hashed bundles do.
+// deploy. Hashed Angular entry filenames are resolved at runtime from the
+// entries.json manifest written by publish-dist.sh next to the bundles.
+//
+// The manifest is read from raw.githubusercontent.com (cache ~5 min, no purge
+// needed) and NOT from the jsDelivr Data API: the Data API caches the branch
+// listing with max-age of ONE YEAR and its origin's branch→commit resolution
+// can stay stuck on a stale commit indefinitely — after the 2026-07-15
+// publish it kept resolving the previous generation of (deleted) bundles,
+// breaking every embed. cdn.jsdelivr.net (sibling entries.json) is kept as a
+// fallback: it is purged on every publish by publish-dist.sh.
 (function () {
   const base = new URL('.', import.meta.url).href;
   const widgetName = new URL(import.meta.url).pathname.split('/').pop().replace(/\.js$/, '');
-  const packageIndexUrl =
-    'https://data.jsdelivr.com/v1/package/gh/webmappsrl/wm-elements@dist/flat';
+  const manifestUrls = [
+    `https://raw.githubusercontent.com/webmappsrl/wm-elements/dist/${widgetName}/entries.json`,
+    base + 'entries.json',
+  ];
 
   function loadStyle(href) {
     const link = document.createElement('link');
@@ -42,25 +51,24 @@
     });
   }
 
-  function resolveEntries(files) {
-    const prefix = `/${widgetName}/`;
-    const pick = (pattern) => {
-      const entry = files.find(
-        (f) => f.name.startsWith(prefix) && pattern.test(f.name.slice(prefix.length)),
-      );
-      return entry ? entry.name.slice(prefix.length) : null;
-    };
-    const entries = {
-      runtime: pick(/^runtime\.[^/]+\.js$/),
-      polyfills: pick(/^polyfills\.[^/]+\.js$/),
-      scripts: pick(/^scripts\.[^/]+\.js$/),
-      main: pick(/^main\.[^/]+\.js$/),
-      styles: pick(/^styles\.[^/]+\.css$/),
-    };
-    for (const [key, value] of Object.entries(entries)) {
-      if (!value) throw new Error(`missing ${key} in jsDelivr package index`);
-    }
-    return entries;
+  function fetchManifest(urls) {
+    const [url, ...rest] = urls;
+    return fetch(url, {cache: 'no-store'})
+      .then((r) => {
+        if (!r.ok) throw new Error(`manifest HTTP ${r.status} (${url})`);
+        return r.json();
+      })
+      .then((entries) => {
+        for (const key of ['runtime', 'polyfills', 'scripts', 'main', 'styles']) {
+          if (!entries[key]) throw new Error(`missing ${key} in entries.json (${url})`);
+        }
+        return entries;
+      })
+      .catch((err) => {
+        if (rest.length === 0) throw err;
+        console.warn(`[wm-elements] manifest fetch failed, trying fallback:`, err);
+        return fetchManifest(rest);
+      });
   }
 
   function loadBundles(entries) {
@@ -73,11 +81,7 @@
       .then(() => loadScript(entries.main));
   }
 
-  fetch(packageIndexUrl, {cache: 'no-store'})
-    .then((r) => {
-      if (!r.ok) throw new Error(`package index HTTP ${r.status}`);
-      return r.json();
-    })
-    .then(({files}) => loadBundles(resolveEntries(files)))
+  fetchManifest(manifestUrls)
+    .then((entries) => loadBundles(entries))
     .catch((err) => console.error('[wm-elements] failed to load widget bundle:', err));
 })();
