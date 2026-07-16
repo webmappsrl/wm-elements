@@ -221,6 +221,5 @@ else
 fi
 echo "URL jsDelivr stabile:"
 echo "  https://cdn.jsdelivr.net/gh/webmappsrl/wm-elements@dist/${WIDGET}/${WIDGET}.js"
-echo "Il loader è statico; i nomi bundle hashati sono risolti via data.jsdelivr.com."
-echo "Branch @dist: cache CDN ~12h, purge inaffidabile — alla prima migrazione attendere o purgare ${WIDGET}.js."
+echo "Il loader è statico; i nomi bundle hashati sono risolti via entries.json (raw.githubusercontent.com, cache ~5 min)."
 echo "Per il rollback: ripunta 'dist' a un tag precedente (git push origin <tag>:dist --force), mai un push distruttivo diretto."
