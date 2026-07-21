@@ -249,6 +249,26 @@ wm-map {
   object-fit: cover;
 }
 
+// Wrapper per sovrapporre logo_image (se presente) all'icona del layer,
+// stesso pattern di .wm-layer-box-logo-overlay in wm-core/layer-box.
+.layer-badge-icon-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.layer-badge-logo-overlay {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--wm-color-light, #fff);
+  object-fit: cover;
+  background: var(--wm-color-light, #fff);
+}
+
 // inset-block-end: 40px (non 10px) per lasciare spazio allo scale-line di
 // map-core (submodule, non modificabile), ancorato a `bottom: 11px; left:
 // 0; width: 100px` nello stesso angolo — senza questo margine i due

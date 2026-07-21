@@ -28,13 +28,26 @@
       part="layer-badge"
       aria-hidden="true"
     >
-      <img
-        *ngIf="currentLayer.icon"
-        class="layer-badge-icon"
-        part="layer-badge-icon"
-        [src]="currentLayer.icon"
-        alt=""
-      />
+      <span
+        *ngIf="currentLayer.icon || (currentLayer.logo_image | hasLogo)"
+        class="layer-badge-icon-wrap"
+      >
+        <img
+          *ngIf="currentLayer.icon"
+          class="layer-badge-icon"
+          part="layer-badge-icon"
+          [src]="currentLayer.icon"
+          alt=""
+        />
+        <img
+          *ngIf="currentLayer.logo_image | hasLogo"
+          [class.layer-badge-logo-overlay]="currentLayer.icon"
+          [class.layer-badge-icon]="!currentLayer.icon"
+          part="layer-badge-logo-overlay"
+          [src]="currentLayer.logo_image"
+          alt=""
+        />
+      </span>
       <span class="layer-badge-label">{{ currentLayer.title|wmtrans }}</span>
     </div>
   </div>

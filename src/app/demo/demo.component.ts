@@ -13,9 +13,9 @@ const WIDGET_LOADER_URL =
   templateUrl: './demo.component.html',
 })
 export class DemoComponent {
-  shard = 'camminiditalia';
+  shard = 'camminiditaliadev';
   appId = '1';
-  layerId = '130';
+  layerId = '56';
   lang = 'it';
   hideCta = false;
 

@@ -24,7 +24,7 @@ import {DemoComponent} from './demo/demo.component';
 const environment: Environment = {
   production: false,
   appId: 1,
-  shardName: 'camminiditalia',
+  shardName: 'camminiditaliadev',
   shards,
   redirects: {},
 };
