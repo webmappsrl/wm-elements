@@ -78,8 +78,17 @@ Il repo ospita più widget nel tempo — ognuno con build, output e distribuzion
 | Feature | Ticket | Moduli toccati | Note |
 |---|---|---|---|
 | Direttiva related POI riscritta (fuori da map-core) | — | `src/app/wm-layer-map/directives/track-related-pois.directive.ts`, `src/app/wm-layer-map/directives/ol.ts` | Sostituisce la legacy `WmMapTrackRelatedPoisDirective` di map-core nel widget: selettore `wmelMapTrackRelatedPois`, firma identica, selezione single-writer |
+| Fix zoom minimo, POI mancanti e margine bbox su embed | oc:8240 | `wm-layer-map/directives/wm-layer-map.directive.ts`, `wm-layer-map/wm-layer-map.component.ts` | Dezoom di un livello oltre il fit (clampato al minZoom globale di config), POI del layer sempre visibili (fix `poiMinZoom`), bbox allargato del 10% per lato per margine cliccabile sui punti estremi |
 
 ## Decisioni architetturali
+
+### Fix zoom minimo, POI mancanti e margine bbox su embed (oc:8240)
+
+- **Bug falsy-zero in map-core da NON reintrodurre**: `map-core/src/directives/pois.directive.ts` legge la soglia POI come `+wmMapConf?.pois?.poiMinZoom || 15` — `0` è falsy in JavaScript, quindi un override a `0` ricade silenziosamente sul fallback hardcoded `15`. Il fix usa `poiMinZoom = 5` (non falsy), forzato trasformando l'observable `confMap$` in `wm-layer-map.component.ts` con un `map()` RxJS.
+- **Override locale al componente, non DI globale su `ConfService`**: prima scelta (poi scartata) era un `WidgetConfService extends ConfService` registrato via override DI in `bootstrap-widget.ts` (stesso pattern di `UrlHandlerService`/`EnvironmentService`). Scartata perché `npm run start:demo` usa un bootstrap Angular separato (`bootstrap-demo.ts`) che non eredita override registrati in `bootstrap-widget.ts` — la demo avrebbe mostrato un comportamento diverso dal widget reale. Il binding `[wmMapConf]="confMap$|async"` in `wm-layer-map.component.html` alimenta con lo stesso oggetto sia `<wm-map>` sia la direttiva `wmMapPois` di map-core attaccata allo stesso host: trasformare `confMap$` in `wm-layer-map.component.ts` risolve il problema per entrambi i bootstrap, senza toccare `ConfService`/DI.
+- **`minZoom` non più bloccato al livello del fit**: `WmLayerMapDirective` impostava `view.setMinZoom(view.getZoom())` subito dopo il `fit()` sul bbox del layer, impedendo qualsiasi dezoom. Ora `minZoom = Math.max(fitZoom - 1, confMinZoom)`, dove `confMinZoom` è il `MAP.minZoom` globale della config (passato da `wm-layer-map.component.ts` come nuovo parametro di `apply()`) — un livello di dezoom in più, mai sotto il minimo globale.
+- **Bbox allargato del 10% per lato (`bufferExtent`, stessa direttiva)**: il bbox grezzo del layer, usato sia per il `fit()` sia per il vincolo di pan (`extent` della `View`), lasciava i punti di partenza/arrivo del cammino appiccicati al bordo del viewport. L'allargamento va applicato all'extent **prima** di costruire sia la `View` che il `fit()` — un `padding` in pixel del solo `fit()` non basta, perché non sposterebbe il vincolo di pan.
+- **`Extent` di OpenLayers (`ol/extent`), non tupla `[number,number,number,number]`**: `extentFromLonLat` (map-core) ritorna `Extent` (`number[]`), non una tupla a lunghezza fissa — tipizzare `bufferExtent` con una tupla causa `TS2345` in build (non sempre rilevato da `tsc --noEmit` isolato, solo dal build Angular reale).
 
 ### Riscrittura direttiva track related POI (riscrittura-direttiva-track-related-pois)
 
