@@ -79,6 +79,7 @@ import {IonicModule} from '@ionic/angular';
 
 const initPadding = [10, 10, 10, 10];
 const maxWidth = 600;
+const WIDGET_POI_MIN_ZOOM = 5;
 
 /**
  * Copied from wm-core's WmGeoboxMapComponent (geobox-map/geobox-map.component.ts)
@@ -132,7 +133,22 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   apiElasticState$: Observable<any> = this._store.select(mapFilters);
   confJIDOUPDATETIME$: Observable<any> = this._store.select(confJIDOUPDATETIME);
-  confMap$: Observable<any> = this._store.select(confMAP);
+  // `poiMinZoom` in map-core (pois.directive.ts) nasconde il layer POI
+  // sotto una soglia di zoom (letta come `+wmMapConf?.pois?.poiMinZoom ||
+  // 15` — 0 è falsy in JS, quindi il valore forzato qui non può essere 0
+  // o ricadrebbe silenziosamente sul fallback 15). Si forza `5`, soglia
+  // sempre soddisfatta nei casi reali del widget (fit di un singolo
+  // cammino produce zoom ben più alto), per tenere i POI sempre visibili
+  // senza modificare map-core. Stesso oggetto alimenta sia <wm-map> che
+  // la direttiva wmMapPois via il binding [wmMapConf] in
+  // wm-layer-map.component.html.
+  confMap$: Observable<any> = this._store.select(confMAP).pipe(
+    map(conf =>
+      conf == null
+        ? conf
+        : {...conf, pois: {...(conf.pois ?? {}), poiMinZoom: WIDGET_POI_MIN_ZOOM}},
+    ),
+  );
   confOPTIONSShowFeaturesInViewport$: Observable<boolean> = this._store.select(
     confOPTIONSShowFeaturesInViewport,
   );
@@ -373,6 +389,7 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
                   layer.bbox,
                   conf.maxZoom,
                   currentPadding ?? initPadding,
+                  conf.minZoom,
                 );
               });
           }
