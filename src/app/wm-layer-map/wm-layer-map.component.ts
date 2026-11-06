@@ -76,6 +76,7 @@ import {ensureGalleryModalGlobalStyles} from './gallery-modal-global-styles';
 import {ensureIoniconsSetup} from './ionicons-setup';
 import {WmLayerMapPoiPanelComponent} from './wm-layer-map-poi-panel.component';
 import {FeatureLike} from 'ol/Feature';
+import GeoJSON from 'ol/format/GeoJSON';
 import {ZoomFeaturesInViewport} from '@wm-types/config';
 import {WmCoreModule} from '@wm-core/wm-core.module';
 import {CommonModule} from '@angular/common';
@@ -88,6 +89,11 @@ const WIDGET_POI_MIN_ZOOM = 5;
 // `moveend` atteso non arriva. L'attesa della mappa usa gli stessi tempi di
 // WmLayerMapDirective (MAP_READY_POLL_*).
 const INITIAL_TRACK_MOVEEND_TIMEOUT_MS = 1500;
+// Mobile (oc:8937): stessa soglia della media query del pannello nello SCSS
+// (`@media (max-width: 600px)`), ricavata da `maxWidth`. Nota: il controllo
+// già esistente `window.innerWidth < maxWidth` esclude i 600 px esatti, la
+// media query (≤) li include.
+const MOBILE_PANEL_MEDIA_QUERY = `(max-width: ${maxWidth}px)`;
 
 /**
  * Copied from wm-core's WmGeoboxMapComponent (geobox-map/geobox-map.component.ts)
@@ -123,6 +129,9 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   // Timer della selezione iniziale da `track-id` (attesa della mappa o limite
   // sul `moveend`): cancellato quando parte la selezione e in ngOnDestroy.
   private _initialTrackTimer: ReturnType<typeof setTimeout> | null = null;
+  // Timer dell'attesa della mappa per il refit su mobile: cancellato in
+  // ngOnDestroy.
+  private _mobileRefitTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() ready = new EventEmitter<void>();
   @Output() error = new EventEmitter<{message: string}>();
@@ -412,6 +421,7 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
                   conf.minZoom,
                 );
                 this._selectInitialTrackAfterRender(0);
+                this._refitTrackOnMobileResize(0);
               });
           }
           this._urlHandlerSvc.updateURL({layer: this.layerId});
@@ -442,6 +452,10 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this._clearInitialTrackTimer();
+    if (this._mobileRefitTimer != null) {
+      clearTimeout(this._mobileRefitTimer);
+      this._mobileRefitTimer = null;
+    }
     this._destroy$.next();
     this._destroy$.complete();
     document.removeEventListener('fullscreenchange', this._onFullscreenChange);
@@ -568,6 +582,47 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
       olMap.once('moveend', select);
       this._initialTrackTimer = setTimeout(select, INITIAL_TRACK_MOVEEND_TIMEOUT_MS);
     });
+  }
+
+  // Mobile (oc:8937): il dettaglio occupa la metà bassa e la mappa si riduce
+  // alla metà alta (SCSS). Lo zoom sulla traccia, calcolato da map-core
+  // sull'altezza intera, la lascerebbe tagliata: quando la mappa cambia
+  // dimensione con una traccia aperta (apertura del dettaglio, rotazione del
+  // telefono) si rifà il fit sull'estensione della traccia con la nuova
+  // altezza. Chiamato dopo `apply()`, a config già caricata: map-core crea la
+  // mappa solo dopo la config (più un delay), e un'attesa partita prima
+  // potrebbe scadere su rete lenta.
+  private _refitTrackOnMobileResize(attempt: number): void {
+    const olMap = this._wmLayerMapDirective?.olMap;
+    if (olMap == null) {
+      if (attempt < MAP_READY_POLL_MAX_ATTEMPTS) {
+        this._mobileRefitTimer = setTimeout(
+          () => this._refitTrackOnMobileResize(attempt + 1),
+          MAP_READY_POLL_INTERVAL_MS,
+        );
+      }
+      return;
+    }
+    this._mobileRefitTimer = null;
+    let currentTrack: WmFeature<LineString> | null = null;
+    this.ecTrack$
+      .pipe(takeUntil(this._destroy$))
+      .subscribe(track => (currentTrack = track ?? null));
+    const onSizeChange = () => {
+      if (currentTrack?.geometry == null || !window.matchMedia(MOBILE_PANEL_MEDIA_QUERY).matches) {
+        return;
+      }
+      const extent = new GeoJSON()
+        .readGeometry(currentTrack.geometry, {
+          dataProjection: 'EPSG:4326',
+          featureProjection: 'EPSG:3857',
+        })
+        .getExtent();
+      // Margine in alto per i badge (CTA app e layer) sopra la mappa.
+      olMap.getView().fit(extent, {padding: [80, 20, 20, 20], duration: 300});
+    };
+    olMap.on('change:size', onSizeChange);
+    this._destroy$.pipe(take(1)).subscribe(() => olMap.un('change:size', onSizeChange));
   }
 
   private _clearInitialTrackTimer(): void {

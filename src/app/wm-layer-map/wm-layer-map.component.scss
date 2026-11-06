@@ -165,14 +165,50 @@ wm-map {
   animation: wm-panel-slide-in 250ms ease-out;
 }
 
+// Mobile (oc:8937): come nell'app, il dettaglio occupa la metà bassa del
+// widget e la mappa si riduce alla metà alta, così traccia e dettaglio si
+// vedono insieme. Il fit sulla traccia con la nuova altezza lo rifà il
+// componente al `change:size` della mappa (`_refitTrackOnMobileResize`).
+// La soglia è la stessa di MOBILE_PANEL_MEDIA_QUERY (ricavata da `maxWidth`)
+// nel componente.
 @media (max-width: 600px) {
-  .panel {
+  .panel,
+  wm-layer-map-poi-panel {
+    top: 50%;
+    bottom: 0;
     width: 100%;
+    border-radius: var(--wm-surface-radius, 12px) var(--wm-surface-radius, 12px) 0 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
+    animation: wm-panel-slide-up 250ms ease-out;
+  }
+  // POI senza galleria né descrizione: il pannello resta alto quanto il
+  // contenuto, appoggiato in basso, e la mappa non si riduce.
+  wm-layer-map-poi-panel.panel-compact {
+    top: auto;
+    height: auto;
+    max-height: 50%;
+  }
+  .panel ~ wm-map,
+  wm-layer-map-poi-panel:not(.panel-compact) ~ wm-map {
+    flex: 0 0 50%;
+    height: 50%;
   }
 }
 
+@keyframes wm-panel-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+// Anche per il pannello POI: su mobile la regola sopra (slide-up) vincerebbe
+// sul `:host` del componente figlio.
 @media (prefers-reduced-motion: reduce) {
-  .panel {
+  .panel,
+  wm-layer-map-poi-panel {
     animation: wm-panel-fade-in 150ms ease-out;
   }
 }
