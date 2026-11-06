@@ -36,7 +36,7 @@ I submodule (`src/app/shared/map-core`, `src/app/shared/wm-core`, `src/app/share
 npm run start:demo
 ```
 
-Avvia `ng serve --configuration=demo` su `http://localhost:4200` — monta i componenti del widget come normali componenti Angular (non come custom element), con hot reload istantaneo e un form per cambiare a runtime gli attributi (`shard`, `app-id`, `layer-id`, `lang`, `hide-cta`). Usa questa modalità per il lavoro di tutti i giorni.
+Avvia `ng serve --configuration=demo` su `http://localhost:4200` — monta i componenti del widget come normali componenti Angular (non come custom element), con hot reload istantaneo e un form per cambiare a runtime gli attributi (`shard`, `app-id`, `layer-id`, `track-id`, `lang`, `hide-cta`). Usa questa modalità per il lavoro di tutti i giorni.
 
 **Non usare le build di produzione per iterare**: il bundle custom-element non ha hot reload (richiede rebuild manuale ad ogni modifica).
 
@@ -108,7 +108,10 @@ Un solo `<script>`, come nel widget precedente:
 
 Questo file (`scripts/widget-loader.template.js` nel repo, pubblicato come `wm-layer-map.js`) non è il bundle Angular vero e proprio — è un piccolo loader hand-written che, sfruttando `import.meta.url` per trovare i propri file "fratelli", carica in sequenza `styles.css`, `runtime.js`, `polyfills.js`, `scripts.js` (graphhopper, caricato come script classico, non modulo — vedi commento nel file) e infine `main.js`, che bootstrappa il vero custom element. Il cliente non deve mai referenziare questi file direttamente né conoscerne l'esistenza.
 
-Attributi opzionali (`cta-label`, `cta-url`, `app-icon-url`, `ios-store-url`, `android-store-url`, `hide-cta`, `lang`), eventi (`ready`, `track-selected`, `error`) e contratto di theming (CSS custom properties, CSS Parts): vedi `CLAUDE.md`, sezione "Global Constraints" del piano in `docs/features/8252-wm-layer-map-angular/plan.md`.
+Attributi opzionali (`track-id`, `cta-label`, `cta-url`, `app-icon-url`, `ios-store-url`, `android-store-url`, `hide-cta`, `lang`), eventi (`ready`, `track-selected`, `error`) e contratto di theming (CSS custom properties, CSS Parts): vedi `CLAUDE.md`, sezione "Global Constraints" del piano in `docs/features/8252-wm-layer-map-angular/plan.md`.
+
+- **`track-id`** (oc:8937): ID di una traccia del layer. All'avvio il widget apre quella traccia come se l'utente l'avesse cliccata (traccia evidenziata, mappa centrata, dettaglio aperto); chiudendo il dettaglio si torna al layer. Serve solo all'avvio; un valore vuoto, non numerico o di una traccia inesistente viene ignorato. In questo caso anche `track-selected` viene emesso all'avvio, senza click.
+- **Un solo `<wm-layer-map>` per pagina**: tutte le istanze di una pagina condividono la stessa applicazione Angular e lo stesso store, quindi la traccia selezionata è una sola per tutta la pagina (cliccando o aprendo una traccia in un widget, si apre in tutti).
 
 Questo URL **non cambia mai**, anche dopo nuove pubblicazioni di `wm-layer-map` o di futuri altri widget — jsDelivr può impiegare qualche minuto a propagare l'aggiornamento dopo ogni `publish-dist.sh` (cache CDN sui branch, non sui tag).
 

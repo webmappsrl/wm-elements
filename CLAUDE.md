@@ -33,16 +33,16 @@ Ordine di dipendenza: `wm-types` → `wm-core` → `wm-elements` (stessa convenz
 
 `wm-elements` non è un'app Ionic completa: niente routing, niente pagine, niente store applicativo per home/UGC/editing. È una libreria di webcomponent minimale:
 
-- `src/main.ts` — bootstrap dell'injector isolato (`createApplication` + `createCustomElement`), un'istanza per elemento, nessuno stato condiviso tra istanze. **Un widget = un entry point**: un futuro widget avrà un proprio `src/main-<widget>.ts`, mai aggiunto allo stesso bundle di un altro (vedi Build multi-widget sotto).
+- `src/main.ts` — bootstrap dell'injector isolato (`createApplication` + `createCustomElement`), una sola applicazione Angular per pagina: tutti i `<wm-layer-map>` della pagina condividono injector e store NgRx (la traccia selezionata è unica per la pagina), quindi è supportato un solo widget per pagina. **Un widget = un entry point**: un futuro widget avrà un proprio `src/main-<widget>.ts`, mai aggiunto allo stesso bundle di un altro (vedi Build multi-widget sotto).
 - `src/app/wm-layer-map/` — componente root del widget `wm-layer-map` e relativi servizi (config fetch, ecc.)
 - `src/app/services/local-url-handler.service.ts` — shim che sostituisce `UrlHandlerService` di `wm-core` via DI override (`{provide: UrlHandlerService, useClass: LocalUrlHandlerService}`), per evitare la dipendenza da `Router`/`ActivatedRoute` reali e non manipolare mai l'URL della pagina host
 - `test/<widget>/index.html` — pagina di verifica manuale per widget (nessun test automatico Karma/Jasmine in questo repo: la logica di dominio è già coperta dai test dei submodule, qui si fa solo composizione/wiring UI)
 - `scripts/publish-dist.sh <widget>` — pubblicazione manuale del bundle di un singolo widget su una sottocartella dedicata del branch `dist` stabile + tag Git per rollback (URL jsDelivr fissa, non cambia mai per il cliente); non tocca gli altri widget già pubblicati
-- `scripts/sync-test-page.js <widget>` — rigenera i tag `<link>/<script>` di `test/<widget>/index.html` dal vero output di build (gli hash dei bundle cambiano ad ogni build)
+- `scripts/sync-test-page.js <widget>` — rigenera i tag `<link>/<script>` di tutte le pagine di `test/<widget>/` che hanno i marker `BEGIN/END bundle tags`, dal vero output di build (gli hash dei bundle cambiano ad ogni build)
 
 ## Convenzioni di test
 
-Nessuna suite automatica dedicata in questo repo (decisione presa in fase di design, vedi `docs/features/8252-wm-layer-map-angular/overview.md`). Verifica solo manuale tramite `test/<widget>/index.html`, con scenari fissi: layer solo-tracce, layer tracce+POI, `hide-cta` attivo, lingua non italiana.
+Nessuna suite automatica dedicata in questo repo (decisione presa in fase di design, vedi `docs/features/8252-wm-layer-map-angular/overview.md`). Verifica solo manuale tramite `test/<widget>/index.html`, con scenari fissi: layer solo-tracce, layer tracce+POI, `hide-cta` attivo, lingua non italiana. Lo scenario `track-id` sta in una pagina a parte, `test/wm-layer-map/track-id.html`; `scripts/sync-test-page.js` aggiorna i bundle di tutte le pagine di `test/<widget>/`.
 
 ## Sviluppo quotidiano
 
@@ -79,6 +79,7 @@ Il repo ospita più widget nel tempo — ognuno con build, output e distribuzion
 |---|---|---|---|
 | Direttiva related POI riscritta (fuori da map-core) | — | `src/app/wm-layer-map/directives/track-related-pois.directive.ts`, `src/app/wm-layer-map/directives/ol.ts` | Sostituisce la legacy `WmMapTrackRelatedPoisDirective` di map-core nel widget: selettore `wmelMapTrackRelatedPois`, firma identica, selezione single-writer |
 | Fix zoom minimo, POI mancanti e margine bbox su embed | oc:8240 | `wm-layer-map/directives/wm-layer-map.directive.ts`, `wm-layer-map/wm-layer-map.component.ts` | Dezoom di un livello oltre il fit (clampato al minZoom globale di config), POI del layer sempre visibili (fix `poiMinZoom`), bbox allargato del 10% per lato per margine cliccabile sui punti estremi |
+| Embed di una singola traccia (`track-id`) | oc:8937 | `wm-layer-map/wm-layer-map.component.ts`, `wm-layer-map/directives/wm-layer-map.directive.ts`, `test/wm-layer-map/track-id.html` | Apre all'avvio la traccia indicata come un click. Vedi [docs/knowledge/8937-embed-mappe-per-singola-traccia.md](docs/knowledge/8937-embed-mappe-per-singola-traccia.md) |
 
 ## Decisioni architetturali
 
