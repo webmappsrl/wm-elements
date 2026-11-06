@@ -96,7 +96,21 @@ rm -rf "$PREV_KEEP_DIR"
 # each publish with the current hashed Angular entry filenames — never rename
 # runtime/polyfills/scripts/main to fixed names on dist (jsDelivr caches those
 # aggressively and purge is unreliable; hashed names bust cache automatically).
-pushd "${WORKTREE_DIR}/${WIDGET}" > /dev/null
+#
+# The entry names MUST come from the fresh local build (dist/<widget>), never
+# from the worktree copy: the worktree also keeps the previous generation of
+# bundles (grace period above), so `ls main.*.js | head -1` there can pick the
+# OLD main next to the NEW runtime — the loader then requests a lazy chunk the
+# new runtime does not know (`ChunkLoadError: ... 7650.undefined.js`) and every
+# embed breaks (2026-11-06, oc:8937). Each name must also match exactly one file.
+pushd "dist/${WIDGET}" > /dev/null
+for pattern in 'runtime.*.js' 'polyfills.*.js' 'scripts.*.js' 'main.*.js' 'styles.*.css'; do
+  count=$(ls $pattern 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$count" != "1" ]]; then
+    echo "Error: expected exactly one ${pattern} in dist/${WIDGET} build output, found ${count}." >&2
+    exit 1
+  fi
+done
 RUNTIME_JS=$(ls runtime.*.js 2>/dev/null | head -1)
 POLYFILLS_JS=$(ls polyfills.*.js 2>/dev/null | head -1)
 SCRIPTS_JS=$(ls scripts.*.js 2>/dev/null | head -1)

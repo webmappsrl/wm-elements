@@ -72,6 +72,7 @@ Il repo ospita più widget nel tempo — ognuno con build, output e distribuzion
 - Ogni widget pubblica il proprio bundle in una sottocartella dedicata del branch `dist` (`dist/<widget>/` sul branch, non da confondere con l'output locale `dist/<widget>/` nella working copy), servita via jsDelivr con URL fissa per widget — il cliente non deve mai aggiornare il proprio embed. Pubblicare un widget non tocca gli altri già pubblicati.
 - `ng build` per un widget richiede sempre `--deploy-url` puntato al suo URL jsDelivr finale (gestito da `publish-dist.sh`, mai nella build locale/test): con `<script type="module">` il browser non espone `document.currentScript`, quindi senza `deployUrl` esplicito eventuali chunk caricati lazy da `wm-core`/`map-core` verrebbero richiesti relativi alla pagina del cliente invece che al CDN (404 su ogni sito che embedda il widget).
 - Ogni pubblicazione crea anche un tag Git (`dist-<widget>-YYYYMMDD-HHmm`) per poter fare rollback ripuntando `dist` a un tag precedente invece di un force-push distruttivo — un rollback di un tag ripunta l'intero branch (tutti i widget allo stato di quel momento), non un singolo widget isolato.
+- `entries.json` va scritto con i nomi dei bundle della build appena fatta (`dist/<widget>/`), mai della copia pubblicata sul branch `dist`, che contiene anche la generazione precedente: accoppiare `runtime` nuovo e `main` vecchio rompe tutti gli embed (`ChunkLoadError`, oc:8937). Dopo ogni pubblicazione verificare lo snippet vero via jsDelivr.
 
 ## Feature disponibili
 
