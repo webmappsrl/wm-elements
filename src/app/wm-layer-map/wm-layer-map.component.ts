@@ -66,12 +66,17 @@ import {LangService} from '@wm-core/localization/lang.service';
 import {confAPP} from '@wm-core/store/conf/conf.selector';
 import {ILAYER} from '@wm-core/types/config';
 import {WidgetBrandingService, WidgetPlatform} from '../services/widget-branding.service';
-import {WmLayerMapDirective} from './directives/wm-layer-map.directive';
+import {
+  MAP_READY_POLL_INTERVAL_MS,
+  MAP_READY_POLL_MAX_ATTEMPTS,
+  WmLayerMapDirective,
+} from './directives/wm-layer-map.directive';
 import {WmelMapTrackRelatedPoisDirective} from './directives/track-related-pois.directive';
 import {ensureGalleryModalGlobalStyles} from './gallery-modal-global-styles';
 import {ensureIoniconsSetup} from './ionicons-setup';
 import {WmLayerMapPoiPanelComponent} from './wm-layer-map-poi-panel.component';
 import {FeatureLike} from 'ol/Feature';
+import GeoJSON from 'ol/format/GeoJSON';
 import {ZoomFeaturesInViewport} from '@wm-types/config';
 import {WmCoreModule} from '@wm-core/wm-core.module';
 import {CommonModule} from '@angular/common';
@@ -80,6 +85,15 @@ import {IonicModule} from '@ionic/angular';
 const initPadding = [10, 10, 10, 10];
 const maxWidth = 600;
 const WIDGET_POI_MIN_ZOOM = 5;
+// Selezione iniziale da `track-id` (oc:8937): limite di sicurezza se il
+// `moveend` atteso non arriva. L'attesa della mappa usa gli stessi tempi di
+// WmLayerMapDirective (MAP_READY_POLL_*).
+const INITIAL_TRACK_MOVEEND_TIMEOUT_MS = 1500;
+// Mobile (oc:8937): stessa soglia della media query del pannello nello SCSS
+// (`@media (max-width: 600px)`), ricavata da `maxWidth`. Nota: il controllo
+// già esistente `window.innerWidth < maxWidth` esclude i 600 px esatti, la
+// media query (≤) li include.
+const MOBILE_PANEL_MEDIA_QUERY = `(max-width: ${maxWidth}px)`;
 
 /**
  * Copied from wm-core's WmGeoboxMapComponent (geobox-map/geobox-map.component.ts)
@@ -110,6 +124,14 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input('android-store-url') androidStoreUrlAttr?: string;
   @Input('hide-cta') hideCtaAttr?: string;
   @Input() lang?: string;
+  @Input('track-id') trackIdAttr?: string;
+
+  // Timer della selezione iniziale da `track-id` (attesa della mappa o limite
+  // sul `moveend`): cancellato quando parte la selezione e in ngOnDestroy.
+  private _initialTrackTimer: ReturnType<typeof setTimeout> | null = null;
+  // Timer dell'attesa della mappa per il refit su mobile: cancellato in
+  // ngOnDestroy.
+  private _mobileRefitTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() ready = new EventEmitter<void>();
   @Output() error = new EventEmitter<{message: string}>();
@@ -153,7 +175,14 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
     confOPTIONSShowFeaturesInViewport,
   );
   currentEcPoiId$ = this._store.select(currentEcPoiId);
-  currentLayer$ = this._store.select(ecLayer);
+  // Lo store può riemettere lo stesso layer come oggetto nuovo (con contenuto
+  // identico) quando si seleziona una traccia: `WmMapLayerDirective` di
+  // map-core, ricevendolo di nuovo, rifà il fit sul bbox del layer e annulla
+  // lo zoom sulla traccia appena selezionata (oc:8937). Si passa il layer solo
+  // quando cambia davvero.
+  currentLayer$ = this._store
+    .select(ecLayer)
+    .pipe(distinctUntilChanged((prev, curr) => prev?.id === curr?.id));
   ecTrack$ = this._store.select(currentEcTrack);
   currentRelatedPoi$ = this._store.select(currentEcRelatedPoi);
   currentRelatedPoiID$ = this._store.select(currentEcRelatedPoiId);
@@ -391,6 +420,8 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
                   currentPadding ?? initPadding,
                   conf.minZoom,
                 );
+                this._selectInitialTrackAfterRender(0);
+                this._refitTrackOnMobileResize(0);
               });
           }
           this._urlHandlerSvc.updateURL({layer: this.layerId});
@@ -420,6 +451,11 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._clearInitialTrackTimer();
+    if (this._mobileRefitTimer != null) {
+      clearTimeout(this._mobileRefitTimer);
+      this._mobileRefitTimer = null;
+    }
     this._destroy$.next();
     this._destroy$.complete();
     document.removeEventListener('fullscreenchange', this._onFullscreenChange);
@@ -498,6 +534,111 @@ export class WmLayerMapComponent implements OnInit, AfterViewInit, OnDestroy {
         this._store.dispatch(stopLoader({identifier: 'pois'}));
         break;
     }
+  }
+
+  // `track-id` (oc:8937) serve solo all'avvio: apre la traccia come se
+  // l'utente l'avesse cliccata, poi il widget funziona come sempre.
+  // Accetta solo un intero positivo: valori vuoti o non numerici vengono
+  // ignorati senza errori.
+  private _parseTrackId(): number | null {
+    const raw = this.trackIdAttr?.trim();
+    if (raw == null || raw === '') {
+      return null;
+    }
+    const id = Number(raw);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  // La selezione non può partire subito: `apply()` riposiziona la mappa sul
+  // bbox del layer e, al primo render, map-core avvia un'animazione di fit
+  // sullo stesso bbox; uno zoom sulla traccia partito prima verrebbe
+  // annullato. Si attende quindi il primo `rendercomplete` e il `moveend`
+  // successivo (con un limite di sicurezza se `moveend` non arriva).
+  private _selectInitialTrackAfterRender(attempt: number): void {
+    const trackId = this._parseTrackId();
+    if (trackId == null) {
+      return;
+    }
+    const olMap = this._wmLayerMapDirective.olMap;
+    if (olMap == null) {
+      if (attempt < MAP_READY_POLL_MAX_ATTEMPTS) {
+        this._initialTrackTimer = setTimeout(
+          () => this._selectInitialTrackAfterRender(attempt + 1),
+          MAP_READY_POLL_INTERVAL_MS,
+        );
+      }
+      return;
+    }
+    olMap.once('rendercomplete', () => {
+      let done = false;
+      const select = () => {
+        if (done) {
+          return;
+        }
+        done = true;
+        this._clearInitialTrackTimer();
+        this._selectInitialTrack(trackId);
+      };
+      olMap.once('moveend', select);
+      this._initialTrackTimer = setTimeout(select, INITIAL_TRACK_MOVEEND_TIMEOUT_MS);
+    });
+  }
+
+  // Mobile (oc:8937): il dettaglio occupa la metà bassa e la mappa si riduce
+  // alla metà alta (SCSS). Lo zoom sulla traccia, calcolato da map-core
+  // sull'altezza intera, la lascerebbe tagliata: quando la mappa cambia
+  // dimensione con una traccia aperta (apertura del dettaglio, rotazione del
+  // telefono) si rifà il fit sull'estensione della traccia con la nuova
+  // altezza. Chiamato dopo `apply()`, a config già caricata: map-core crea la
+  // mappa solo dopo la config (più un delay), e un'attesa partita prima
+  // potrebbe scadere su rete lenta.
+  private _refitTrackOnMobileResize(attempt: number): void {
+    const olMap = this._wmLayerMapDirective?.olMap;
+    if (olMap == null) {
+      if (attempt < MAP_READY_POLL_MAX_ATTEMPTS) {
+        this._mobileRefitTimer = setTimeout(
+          () => this._refitTrackOnMobileResize(attempt + 1),
+          MAP_READY_POLL_INTERVAL_MS,
+        );
+      }
+      return;
+    }
+    this._mobileRefitTimer = null;
+    let currentTrack: WmFeature<LineString> | null = null;
+    this.ecTrack$
+      .pipe(takeUntil(this._destroy$))
+      .subscribe(track => (currentTrack = track ?? null));
+    const onSizeChange = () => {
+      if (currentTrack?.geometry == null || !window.matchMedia(MOBILE_PANEL_MEDIA_QUERY).matches) {
+        return;
+      }
+      const extent = new GeoJSON()
+        .readGeometry(currentTrack.geometry, {
+          dataProjection: 'EPSG:4326',
+          featureProjection: 'EPSG:3857',
+        })
+        .getExtent();
+      // Margine in alto per i badge (CTA app e layer) sopra la mappa.
+      olMap.getView().fit(extent, {padding: [80, 20, 20, 20], duration: 300});
+    };
+    olMap.on('change:size', onSizeChange);
+    this._destroy$.pipe(take(1)).subscribe(() => olMap.un('change:size', onSizeChange));
+  }
+
+  private _clearInitialTrackTimer(): void {
+    if (this._initialTrackTimer != null) {
+      clearTimeout(this._initialTrackTimer);
+      this._initialTrackTimer = null;
+    }
+  }
+
+  // Se nel frattempo il visitatore ha già cliccato una traccia (rete lenta,
+  // mappa già cliccabile prima del `rendercomplete`), la sua scelta vince.
+  private _selectInitialTrack(trackId: number): void {
+    if (this._urlHandlerSvc.getCurrentQueryParams().track != null) {
+      return;
+    }
+    this.updateEcTrack(trackId);
   }
 
   updateEcTrack(trackId: number | undefined = undefined): void {

@@ -16,6 +16,7 @@ export class DemoComponent {
   shard = 'camminiditaliadev';
   appId = '1';
   layerId = '56';
+  trackId = '';
   lang = 'it';
   hideCta = false;
 
@@ -28,6 +29,7 @@ export class DemoComponent {
   previewShard = this.shard;
   previewAppId = this.appId;
   previewLayerId = this.layerId;
+  previewTrackId = this.trackId;
   previewLang = this.lang;
   previewHideCta = this.hideCta;
   showWidget = true;
@@ -36,6 +38,7 @@ export class DemoComponent {
     this.previewShard = this.shard;
     this.previewAppId = this.appId;
     this.previewLayerId = this.layerId;
+    this.previewTrackId = this.trackId;
     this.previewLang = this.lang;
     this.previewHideCta = this.hideCta;
     this.showWidget = false;
@@ -47,6 +50,7 @@ export class DemoComponent {
       `shard="${this.shard}"`,
       `app-id="${this.appId}"`,
       `layer-id="${this.layerId}"`,
+      ...(this.trackId ? [`track-id="${this.trackId}"`] : []),
       ...(this.lang && this.lang !== 'it' ? [`lang="${this.lang}"`] : []),
       ...(this.hideCta ? ['hide-cta'] : []),
       'style="display:block;width:100%;height:600px"',
