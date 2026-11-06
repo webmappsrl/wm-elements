@@ -86,6 +86,21 @@ Decisione: verifiche fatte su copie temporanee delle pagine dentro `dist/wm-laye
 - Stima approvata dal dev: 3 h (wm-estimate: misurato 0,58 h + stimato 2,1 h).
 - La stima di `wm-estimate` è stata fatta dopo il piano, non prima: l'agente non stima senza `plan.md`.
 
+## Pubblicazione (06/11/2026)
+
+- PR #1 mergiata su `main` (squash `6f2792a`, Alessandro). Pubblicato con `publish-dist.sh wm-layer-map`:
+  tag `dist-wm-layer-map-20261106-1258`, commit `fbcb51c` su `dist`.
+- **Incidente:** dopo la pubblicazione il widget era rotto per tutti gli embed (`ChunkLoadError: Loading chunk
+  7650 failed`, richiesto `7650.undefined.js`). Causa: `publish-dist.sh` sceglieva i nomi per `entries.json`
+  con `ls main.*.js | head -1` nella copia pubblicata, che contiene anche i bundle della versione precedente;
+  ha preso il `main` vecchio (`main.66639366…`) insieme al `runtime` nuovo (`runtime.331fc5ee…`).
+  Correzione in avanti su `dist` (commit `a65d751`, solo `entries.json` → `main.8b647f52…`), senza
+  force-push; il widget è tornato a funzionare in circa 3 minuti (cache di raw.githubusercontent.com).
+  Verifica con lo snippet vero (jsDelivr): desktop Tappa 01 centrata con galleria, snippet senza
+  `track-id` invariato, mobile 500 px con dettaglio a metà.
+- Correzione dello script nel branch `fix/publish-dist-entries-manifest`: i nomi si prendono dalla build
+  locale `dist/<widget>/` e lo script si ferma se un tipo di bundle ha più di un file.
+
 ## Follow-up
 
 - Mobile: trascinamento del dettaglio su più altezze come in `webmapp-app`; prova su telefono vero e in
