@@ -1,11 +1,12 @@
 import {Directive, Host} from '@angular/core';
+import OlMap from 'ol/Map';
 import View from 'ol/View';
 import {Extent} from 'ol/extent';
 import {WmMapComponent} from '@map-core/components/map/map.component';
 import {extentFromLonLat} from '@map-core/utils';
 
-const MAP_READY_POLL_INTERVAL_MS = 50;
-const MAP_READY_POLL_MAX_ATTEMPTS = 40; // ~2s
+export const MAP_READY_POLL_INTERVAL_MS = 50;
+export const MAP_READY_POLL_MAX_ATTEMPTS = 40; // ~2s
 const BBOX_MARGIN_RATIO = 0.1;
 
 // Allarga l'extent (EPSG:3857) del 10% per lato: senza margine i punti di
@@ -38,6 +39,14 @@ function bufferExtent(extent: Extent): Extent {
 })
 export class WmLayerMapDirective {
   constructor(@Host() private _mapCmp: WmMapComponent) {}
+
+  // Istanza OpenLayers della mappa ospite. Può non esistere ancora: map-core
+  // la crea solo dopo un delay interno successivo al caricamento della config
+  // (vedi `_applyWhenMapReady`), quindi chi la legge deve gestire il valore
+  // assente.
+  get olMap(): OlMap | undefined {
+    return this._mapCmp.map ?? undefined;
+  }
 
   apply(
     bbox: [number, number, number, number],

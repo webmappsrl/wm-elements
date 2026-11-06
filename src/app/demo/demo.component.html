@@ -2,6 +2,7 @@
   <label>shard <input [(ngModel)]="shard" /></label>
   <label>app-id <input [(ngModel)]="appId" /></label>
   <label>layer-id <input [(ngModel)]="layerId" /></label>
+  <label>track-id <input [(ngModel)]="trackId" /></label>
   <label>lang <input [(ngModel)]="lang" /></label>
   <label>hide-cta <input type="checkbox" [(ngModel)]="hideCta" /></label>
   <button type="button" (click)="applyPreview()">Applica e ricarica anteprima</button>
@@ -11,6 +12,7 @@
   [shard]="previewShard"
   [app-id]="previewAppId"
   [layer-id]="previewLayerId"
+  [track-id]="previewTrackId || null"
   [lang]="previewLang"
   [hide-cta]="previewHideCta ? '' : null"
   style="display:block;width:100%;height:600px"
