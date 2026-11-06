@@ -103,7 +103,7 @@ Perché una pagina a parte: tutte le istanze di una pagina condividono lo store 
 - [ ] **Step 3: build** — `nvm use && npm run build:test:wm-layer-map`; atteso: build senza errori e messaggio che cita `index.html` e `track-id.html`.
 - [ ] **Step 4: verifiche con un server statico dalla root del repo** (`python3 -m http.server 8766`):
   - 4.1 `track-id.html` da desktop: 5 caricamenti su 5 con traccia 1186 evidenziata, centrata e dettaglio aperto; almeno uno a cache vuota (DevTools → «Disable cache»).
-  - 4.2 stessa pagina a 400 px di larghezza: il dettaglio copre il widget, chiudendolo si vede il layer.
+  - 4.2 stessa pagina a 400 px di larghezza: il dettaglio copre il widget, chiudendolo si vede il layer. *Superato: layout mobile a metà aggiunto dopo il piano, vedi [notes.md](notes.md#decisioni).*
   - 4.3 `index.html`: i tre scenari identici a prima.
 - [ ] **Step 5: hash dei bundle** — `git checkout test/wm-layer-map/index.html` se il diff è solo negli hash (oc:8240 non li ha committati); `track-id.html` si committa con gli hash della build corrente.
 

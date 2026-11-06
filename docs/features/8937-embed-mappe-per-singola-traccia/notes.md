@@ -36,7 +36,8 @@ Decisione: verifiche fatte su copie temporanee delle pagine dentro `dist/wm-laye
   cache. Un caricamento (il primo dopo la build, senza log) è rimasto sulla vista del layer con il
   dettaglio aperto; non si è più riprodotto, né con la cache disattivata né con il log dei tempi.
 - Chiusura del dettaglio: la mappa torna al layer (zoom 10.1); il click su un'altra traccia funziona.
-- 400–500 px: il dettaglio copre il widget, chiudendolo si vede il layer.
+- 400–500 px: il dettaglio copre il widget, chiudendolo si vede il layer. *Superato dal layout mobile a
+  metà (vedi «Decisioni»).*
 - `track-id` `99999999`, `abc`, `0`, `-3`, vuoto: layer a zoom 10.1, nessun dettaglio aperto, widget
   usabile.
 - Click anticipato: simulato chiamando `updateEcTrack(1199)` appena la mappa esiste (non con «Slow 4G»):
@@ -56,6 +57,29 @@ Decisione: verifiche fatte su copie temporanee delle pagine dentro `dist/wm-laye
   pulita, demo con `track-id`, `track-id.html` (zoom 14.2), i tre scenari di `index.html` (base, `hide-cta`,
   `lang="en"`), galleria in produzione (immagini S3 con risposta 200). Va in un commit separato
   `chore(oc:8937): update wm-core and wm-types to main`.
+- Modifica a posteriori (richiesta del dev, dopo i commit e la review): layout mobile come nell'app. Sotto
+  i 600 px (`@media (max-width: 600px)`, stessa soglia di `MOBILE_PANEL_MEDIA_QUERY`) il dettaglio di tracce
+  e POI parte a metà altezza e la mappa si riduce alla metà alta (`.panel ~ wm-map`); un POI «compatto»
+  resta alto quanto il contenuto e non riduce la mappa. Al `change:size` della mappa, con una traccia
+  aperta, `_refitTrackOnMobileResize` rifà il fit sull'estensione della traccia (padding in alto 80 px per
+  i badge). Provata prima la versione solo CSS: la traccia restava centrata ma troppo zoomata, perché lo
+  zoom di map-core è calcolato sull'altezza intera. Il trascinamento su più altezze di `webmapp-app` non è
+  stato fatto. Verifiche sulla build: `track-id.html` a 549 px 3 caricamenti su 3 con la Tappa 01 intera
+  nella metà alta (zoom 12.6), dettaglio POI del layer 63 nella metà bassa; nella demo click sulla
+  Tappa 11 inquadrata intera, chiusura → mappa a tutta altezza; a 1512 px nessun cambiamento (pannello
+  laterale, zoom 14.2) e i tre scenari di `index.html` invariati. Non provati: telefono vero, rotazione,
+  POI compatto.
+- Correzione dalla terza review interna: il listener `change:size` per il refit su mobile veniva collegato
+  da un'attesa della mappa partita in `ngAfterViewInit` (al massimo 2 s); map-core crea la mappa solo dopo
+  la config più `delay(250)` (`map.component.ts:151-160`), quindi su rete lenta poteva non collegarsi mai.
+  Ora `_refitTrackOnMobileResize` parte dopo `apply()`, a config già caricata, e il suo timer è cancellato
+  in `ngOnDestroy`. Verifica: config ritardata di 3 s via script nella pagina di prova (non con «Slow 3G»
+  dei DevTools, non attivabile dagli strumenti usati), 500 px → Tappa 01 intera nella metà alta (zoom
+  12.6); rete normale 500 px zoom 12.6; 1512 px invariato (zoom 14.2, pannello laterale); `index.html`
+  invariato. POI vicino al bordo basso (Necropoli di Caiolo, layer 63, 500 px): la selezione del POI
+  centra la mappa sul POI, che resta visibile nella metà alta. Cleanup: media query unite,
+  `prefers-reduced-motion` anche per `wm-layer-map-poi-panel`, `currentTrack` tipizzato
+  (`WmFeature<LineString>`), `MOBILE_PANEL_MEDIA_QUERY` ricavata da `maxWidth`.
 - Cleanup dalla review interna: il timer della selezione iniziale viene cancellato quando parte la
   selezione e in `ngOnDestroy`; le costanti di attesa della mappa sono esportate da
   `wm-layer-map.directive.ts` (`MAP_READY_POLL_*`) e riusate nel componente invece di essere copiate.
@@ -63,6 +87,9 @@ Decisione: verifiche fatte su copie temporanee delle pagine dentro `dist/wm-laye
 - La stima di `wm-estimate` è stata fatta dopo il piano, non prima: l'agente non stima senza `plan.md`.
 
 ## Follow-up
+
+- Mobile: trascinamento del dettaglio su più altezze come in `webmapp-app`; prova su telefono vero e in
+  rotazione.
 
 - Pagine di test rotte con la build (`ChunkLoadError` sui chunk lazy): `npm run build:test:*` non imposta un
   `deploy-url` coerente con `test/<widget>/`.

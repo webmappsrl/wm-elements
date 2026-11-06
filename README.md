@@ -111,6 +111,7 @@ Questo file (`scripts/widget-loader.template.js` nel repo, pubblicato come `wm-l
 Attributi opzionali (`track-id`, `cta-label`, `cta-url`, `app-icon-url`, `ios-store-url`, `android-store-url`, `hide-cta`, `lang`), eventi (`ready`, `track-selected`, `error`) e contratto di theming (CSS custom properties, CSS Parts): vedi `CLAUDE.md`, sezione "Global Constraints" del piano in `docs/features/8252-wm-layer-map-angular/plan.md`.
 
 - **`track-id`** (oc:8937): ID di una traccia del layer. All'avvio il widget apre quella traccia come se l'utente l'avesse cliccata (traccia evidenziata, mappa centrata, dettaglio aperto); chiudendo il dettaglio si torna al layer. Serve solo all'avvio; un valore vuoto, non numerico o di una traccia inesistente viene ignorato. In questo caso anche `track-selected` viene emesso all'avvio, senza click.
+- **Mobile** (sotto i 600 px, oc:8937): il dettaglio di tracce e POI occupa la metà bassa del widget e la mappa la metà alta, con la traccia aperta inquadrata per intero; chiudendo il dettaglio la mappa torna a tutta altezza.
 - **Un solo `<wm-layer-map>` per pagina**: tutte le istanze di una pagina condividono la stessa applicazione Angular e lo stesso store, quindi la traccia selezionata è una sola per tutta la pagina (cliccando o aprendo una traccia in un widget, si apre in tutti).
 
 Questo URL **non cambia mai**, anche dopo nuove pubblicazioni di `wm-layer-map` o di futuri altri widget — jsDelivr può impiegare qualche minuto a propagare l'aggiornamento dopo ogni `publish-dist.sh` (cache CDN sui branch, non sui tag).

@@ -12,6 +12,10 @@ possono cliccare le altre tracce.
 
 Senza `track-id` il widget si comporta esattamente come oggi.
 
+Su mobile (sotto i 600 px), con o senza `track-id`, il dettaglio di tracce e POI occupa la metà bassa
+del widget e la mappa la metà alta, con la traccia aperta inquadrata per intero, come nell'app
+(modifica aggiunta dopo il piano, su richiesta del dev).
+
 Esempio di snippet:
 
 ```html
@@ -61,6 +65,8 @@ questo ticket riguarda solo il widget.
       `test/wm-layer-map/track-id.html`: in `index.html` le istanze condividono lo store e il `track-id`
       aprirebbe la traccia anche negli altri scenari. `scripts/sync-test-page.js` aggiorna i bundle di
       tutte le pagine di `test/wm-layer-map/`.
+- [ ] Sotto i 600 px il dettaglio di tracce e POI occupa la metà bassa e la mappa la metà alta; con una
+      traccia aperta il widget rifà il fit sulla traccia alla nuova altezza (modifica a posteriori).
 - [ ] README e `CLAUDE.md` del repo citano il nuovo attributo e il nuovo scenario di test.
 - [ ] README e pagina di conoscenza dicono che è supportato **un solo `<wm-layer-map>` per pagina**; la
       riga del `CLAUDE.md` che parla di «nessuno stato condiviso tra istanze» viene corretta.
@@ -68,7 +74,7 @@ questo ticket riguarda solo il widget.
   - layer 117 + traccia 1186 da desktop: 5 caricamenti su 5 con traccia evidenziata, mappa centrata e
     dettaglio aperto, svuotando la cache almeno una volta;
   - chiusura del dettaglio → la mappa mostra tutto il layer; click su un'altra traccia → comportamento attuale;
-  - stesso scenario a 400 px di larghezza (il dettaglio copre tutto il widget, come al click);
+  - stesso scenario sotto i 600 px di larghezza: dettaglio nella metà bassa, traccia intera nella metà alta;
   - i tre scenari esistenti senza `track-id` invariati;
   - `track-id` inesistente: il layer si vede senza blocchi.
 
@@ -89,8 +95,10 @@ questo ticket riguarda solo il widget.
   selezionata.
 - **`track-selected` all'avvio:** chi ascolta l'evento lo riceve anche senza click. Accettato e
   documentato, per non creare un percorso diverso da quello del click.
-- **Mobile:** con `track-id` la prima cosa visibile su smartphone è il dettaglio a tutto widget. È lo
-  stesso comportamento del click; accettato per ora, da rivedere se Davide lo chiede.
+- **Mobile (modifica a posteriori, richiesta del dev):** sotto i 600 px il dettaglio (traccia o POI)
+  occupa la metà bassa e la mappa la metà alta, come nell'app; al cambio di dimensione della mappa con
+  una traccia aperta il widget rifà il fit sulla traccia. Cambia il comportamento su mobile per tutti i
+  widget già pubblicati, anche al click.
 
 ## Out of scope
 
@@ -98,7 +106,8 @@ questo ticket riguarda solo il widget.
   quando la traccia appartiene a più layer: lo fa Alessandro in un ticket a parte.
 - Passare il layer da usare per la copia come parametro, per evitare la select: follow-up deciso allo
   scrum del 06/11.
-- Cambiare il layout del dettaglio su mobile per l'avvio con `track-id`.
+- Trascinamento del dettaglio su più altezze come in `webmapp-app` (`map-details`): su mobile il dettaglio
+  resta fisso a metà.
 - Supportare più `<wm-layer-map>` indipendenti nella stessa pagina.
 
 ## Moduli toccati
@@ -106,8 +115,9 @@ questo ticket riguarda solo il widget.
 Tutti nel repo `wm-elements`, nessuna modifica al codice dei submodule (i puntatori di `wm-core` e
 `wm-types` sono aggiornati ai rispettivi `main`, decisione del dev durante la review):
 
-- `src/app/wm-layer-map/wm-layer-map.component.ts` — nuovo input, selezione iniziale della traccia e
-  `currentLayer$` che passa il layer alla direttiva solo quando cambia l'`id`
+- `src/app/wm-layer-map/wm-layer-map.component.scss` — layout mobile a metà (dettaglio in basso, mappa in alto)
+- `src/app/wm-layer-map/wm-layer-map.component.ts` — nuovo input, selezione iniziale della traccia, refit su
+  mobile e `currentLayer$` che passa il layer alla direttiva solo quando cambia l'`id`
 - `src/app/wm-layer-map/directives/wm-layer-map.directive.ts` — getter pubblico per la mappa OpenLayers
 - `src/app/demo/demo.component.ts` e `src/app/demo/demo.component.html` — campo `track-id` e snippet
 - `test/wm-layer-map/track-id.html` (nuovo) — scenario con `track-id`

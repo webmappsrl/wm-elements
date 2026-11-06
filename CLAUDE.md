@@ -79,7 +79,7 @@ Il repo ospita più widget nel tempo — ognuno con build, output e distribuzion
 |---|---|---|---|
 | Direttiva related POI riscritta (fuori da map-core) | — | `src/app/wm-layer-map/directives/track-related-pois.directive.ts`, `src/app/wm-layer-map/directives/ol.ts` | Sostituisce la legacy `WmMapTrackRelatedPoisDirective` di map-core nel widget: selettore `wmelMapTrackRelatedPois`, firma identica, selezione single-writer |
 | Fix zoom minimo, POI mancanti e margine bbox su embed | oc:8240 | `wm-layer-map/directives/wm-layer-map.directive.ts`, `wm-layer-map/wm-layer-map.component.ts` | Dezoom di un livello oltre il fit (clampato al minZoom globale di config), POI del layer sempre visibili (fix `poiMinZoom`), bbox allargato del 10% per lato per margine cliccabile sui punti estremi |
-| Embed di una singola traccia (`track-id`) | oc:8937 | `wm-layer-map/wm-layer-map.component.ts`, `wm-layer-map/directives/wm-layer-map.directive.ts`, `test/wm-layer-map/track-id.html` | Apre all'avvio la traccia indicata come un click. Vedi [docs/knowledge/8937-embed-mappe-per-singola-traccia.md](docs/knowledge/8937-embed-mappe-per-singola-traccia.md) |
+| Embed di una singola traccia (`track-id`) e dettaglio a metà su mobile | oc:8937 | `wm-layer-map/wm-layer-map.component.ts`, `wm-layer-map/wm-layer-map.component.scss`, `wm-layer-map/directives/wm-layer-map.directive.ts`, `test/wm-layer-map/track-id.html` | Apre all'avvio la traccia indicata come un click; sotto i 600 px dettaglio nella metà bassa e mappa nella metà alta. Vedi [docs/knowledge/8937-embed-mappe-per-singola-traccia.md](docs/knowledge/8937-embed-mappe-per-singola-traccia.md) |
 
 ## Decisioni architetturali
 

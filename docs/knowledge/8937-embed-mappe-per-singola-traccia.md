@@ -15,6 +15,11 @@ Il comportamento visibile dell'attributo è descritto nel README (attributi opzi
   sul bbox (`layer.directive.ts:115-127`) e annulla lo zoom sulla traccia. Togliendo il filtro la build
   resta verde, ma nella demo la selezione della traccia viene annullata; nel widget compilato non è
   stato riprodotto (un caricamento su 13 non centrato, causa non verificata).
+- Mobile, sotto i 600 px: il dettaglio sta nella metà bassa e la mappa si riduce alla metà alta (SCSS,
+  `.panel ~ wm-map`). Lo zoom di map-core sulla traccia è calcolato sull'altezza intera, quindi al
+  `change:size` della mappa il componente rifà il fit sull'estensione della traccia
+  (`_refitTrackOnMobileResize`). La soglia di 600 px è nella media query dello SCSS e in `maxWidth`
+  del componente, da cui è ricavata `MOBILE_PANEL_MEDIA_QUERY`: vanno cambiate insieme.
 - Lo scenario di verifica sta in `test/wm-layer-map/track-id.html`, separato da `index.html` per il motivo
   scritto nel `CLAUDE.md` (store condiviso fra le istanze di una pagina).
 
@@ -28,6 +33,9 @@ Il comportamento visibile dell'attributo è descritto nel README (attributi opzi
   scrum del 05/11.
 
 ## Come ci siamo arrivati
+
+- **Layout mobile solo CSS** (oc:8937, scartato): la traccia restava centrata ma troppo zoomata nella metà
+  alta.
 
 - **Selezione immediata o al primo render** (oc:8937, scartata): veniva annullata dal fit iniziale.
 - **Widget nuovo `wm-track-map`** (oc:8937, scartato): Giuseppe allo scrum del 05/11, troppo lavoro per una
